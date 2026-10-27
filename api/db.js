@@ -41,7 +41,13 @@ export default async function handler(req, res) {
       try {
         info = await head(DB_KEY);
       } catch (e) {
-        if (e && (e.status === 404 || /not found/i.test(e.message || ''))) {
+        const msg = (e && e.message) || '';
+        if (
+          e &&
+          (e.status === 404 ||
+            e.name === 'BlobNotFoundError' ||
+            /not found|does not exist/i.test(msg))
+        ) {
           return res.status(404).json({ error: 'not_found' });
         }
         throw e;
