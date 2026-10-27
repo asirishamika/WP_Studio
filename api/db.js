@@ -66,7 +66,7 @@ export default async function handler(req, res) {
       const body = await readRawBody(req);
       if (body.length < 28) return res.status(400).json({ error: 'blob_too_small' });
       const blob = await put(DB_KEY, body, {
-        access: 'private',
+        access: 'public',
         addRandomSuffix: false,
         allowOverwrite: true,
         contentType: 'application/octet-stream'
