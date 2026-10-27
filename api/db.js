@@ -52,7 +52,8 @@ export default async function handler(req, res) {
         }
         throw e;
       }
-      const r = await fetch(info.url, { cache: 'no-store' });
+      const downloadUrl = info.downloadUrl || info.url;
+      const r = await fetch(downloadUrl, { cache: 'no-store' });
       if (!r.ok) return res.status(502).json({ error: 'blob_fetch_failed' });
       const buf = Buffer.from(await r.arrayBuffer());
       res.setHeader('Content-Type', 'application/octet-stream');
@@ -65,7 +66,7 @@ export default async function handler(req, res) {
       const body = await readRawBody(req);
       if (body.length < 28) return res.status(400).json({ error: 'blob_too_small' });
       const blob = await put(DB_KEY, body, {
-        access: 'public',
+        access: 'private',
         addRandomSuffix: false,
         allowOverwrite: true,
         contentType: 'application/octet-stream'
