@@ -167,6 +167,66 @@ export function deleteClient(id) {
   });
 }
 
+// ─── SITES ───────────────────────────────────────────
+export function addSite(data) {
+  const id = uid('st');
+  const now = Date.now();
+  mutate(db => {
+    db.sites.push({
+      id,
+      clientId: data.clientId,
+      url: data.url,
+      label: data.label || '',
+      createdAt: now,
+      checkedAt: null,
+      up: null,
+      statusCode: null,
+      latencyMs: null,
+      sslDaysLeft: null,
+      sslExpires: null,
+      sslIssuer: null,
+      isWordPress: null,
+      wpVersion: null,
+      error: null
+    });
+  });
+  return id;
+}
+
+export function updateSite(id, patch) {
+  mutate(db => {
+    const s = db.sites.find(x => x.id === id);
+    if (!s) return;
+    Object.assign(s, patch);
+  });
+}
+
+export function deleteSite(id) {
+  mutate(db => {
+    db.sites = db.sites.filter(s => s.id !== id);
+  });
+}
+
+export function getSite(id) {
+  return state.db?.sites.find(s => s.id === id) || null;
+}
+
+export function sitesOfClient(clientId) {
+  return state.db?.sites.filter(s => s.clientId === clientId) || [];
+}
+
+export function allSites() {
+  return state.db?.sites || [];
+}
+
+export function siteAlerts() {
+  const sites = allSites();
+  const down = sites.filter(s => s.up === false);
+  const sslSoon = sites.filter(s => typeof s.sslDaysLeft === 'number' && s.sslDaysLeft <= 14 && s.sslDaysLeft >= 0);
+  const sslExpired = sites.filter(s => typeof s.sslDaysLeft === 'number' && s.sslDaysLeft < 0);
+  return { down, sslSoon, sslExpired };
+}
+
 // ─── CREDENTIALS (per client, encrypted via main DB) ─────────
 export function addCredential(clientId, data) {
   const id = uid('cr');

@@ -79,3 +79,19 @@ export async function deleteVaultFile(id) {
   if (!r.ok) throw new Error('DEL_FILE_FAILED_' + r.status);
   return r.json();
 }
+
+// ─── site monitor ───────────────────────────────────
+export async function pingSite(url) {
+  const r = await fetch('/api/ping', {
+    method: 'POST',
+    headers: {
+      'x-access-token': getToken(),
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ url })
+  });
+  if (r.status === 401) throw new Error('BAD_TOKEN');
+  if (r.status === 400) throw new Error('BAD_URL');
+  if (!r.ok) throw new Error('PING_FAILED_' + r.status);
+  return r.json();
+}

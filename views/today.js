@@ -30,6 +30,8 @@ export function render() {
 
       <div class="today-grid">
         <div class="today-col">
+          ${siteAlertsBlock()}
+
           <div class="today-section">
             <div class="today-section-h">High priority</div>
             ${highPriority.length === 0
@@ -113,6 +115,41 @@ function projectCard(p) {
   `;
 }
 
+function siteAlertsBlock() {
+  const alerts = store.siteAlerts();
+  const down = alerts.down;
+  const sslSoon = alerts.sslSoon;
+  const sslExpired = alerts.sslExpired;
+  if (down.length === 0 && sslSoon.length === 0 && sslExpired.length === 0) return '';
+  return `
+    <div class="today-section today-alerts">
+      <div class="today-section-h today-section-warn">⚠ Site alerts</div>
+      ${down.map(s => `
+        <div class="today-alert" data-action="open-sites">
+          <span class="site-dot down"></span>
+          <span class="today-alert-label"><strong>${h(stripScheme(s.url))}</strong> is down</span>
+        </div>
+      `).join('')}
+      ${sslExpired.map(s => `
+        <div class="today-alert" data-action="open-sites">
+          <span class="today-alert-icon">🔒</span>
+          <span class="today-alert-label">SSL expired for <strong>${h(stripScheme(s.url))}</strong></span>
+        </div>
+      `).join('')}
+      ${sslSoon.map(s => `
+        <div class="today-alert" data-action="open-sites">
+          <span class="today-alert-icon">🔒</span>
+          <span class="today-alert-label">SSL for <strong>${h(stripScheme(s.url))}</strong> expires in ${s.sslDaysLeft}d</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function stripScheme(url) {
+  return (url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
 function fmtMinsShort(m) {
   if (!m) return '0h';
   if (m < 60) return m + 'm';
@@ -147,6 +184,8 @@ export function wireEvents(root) {
     } else if (action === 'start-timer-row') {
       e.stopPropagation();
       store.startTimer(el.dataset.id);
+    } else if (action === 'open-sites') {
+      store.uiMutate(ui => { ui.view = 'sites'; });
     }
   });
 }

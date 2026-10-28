@@ -8,6 +8,7 @@ import { AVATAR_COLORS } from '/data.js';
 import * as todayView   from '/views/today.js';
 import * as clientView  from '/views/clientView.js';
 import * as projectView from '/views/projectView.js';
+import * as sitesView   from '/views/sitesView.js';
 import * as modals      from '/views/modals.js';
 import * as palette     from '/views/palette.js';
 
@@ -152,6 +153,10 @@ function renderApp() {
 
         <nav class="sb-nav">
           <button class="sb-nav-item ${store.state.ui.view === 'today' ? 'active' : ''}" data-nav="today">🏠 Today</button>
+          <button class="sb-nav-item ${store.state.ui.view === 'sites' ? 'active' : ''}" data-nav="sites">
+            🌐 Sites
+            ${siteBadge()}
+          </button>
           <button class="sb-nav-item" data-action="open-palette">⌘K Jump to…</button>
         </nav>
 
@@ -190,6 +195,7 @@ function renderApp() {
   if (view === 'today')   todayView.wireEvents(mainEl);
   if (view === 'client')  clientView.wireEvents(mainEl);
   if (view === 'project') projectView.wireEvents(mainEl);
+  if (view === 'sites')   sitesView.wireEvents(mainEl);
 
   const modalSlot = document.getElementById('modal-slot');
   if (modalSlot.children.length) modals.wireEvents(modalSlot);
@@ -216,7 +222,15 @@ function mainContent() {
   if (view === 'today')   return todayView.render();
   if (view === 'client')  return clientView.render();
   if (view === 'project') return projectView.render();
+  if (view === 'sites')   return sitesView.render();
   return todayView.render();
+}
+
+function siteBadge() {
+  const a = store.siteAlerts();
+  const count = a.down.length + a.sslExpired.length;
+  if (count === 0) return '';
+  return `<span class="nav-badge nav-badge-warn">${count}</span>`;
 }
 
 function timerWidget() {
@@ -278,6 +292,8 @@ function wireShell(app) {
     if (!el) return;
     if (el.dataset.nav === 'today') {
       store.uiMutate(ui => { ui.view = 'today'; });
+    } else if (el.dataset.nav === 'sites') {
+      store.uiMutate(ui => { ui.view = 'sites'; });
     } else if (el.dataset.action === 'open-client') {
       store.uiMutate(ui => { ui.view = 'client'; ui.clientId = el.dataset.id; ui.clientTab = 'projects'; });
     } else if (el.dataset.action === 'new-client') {

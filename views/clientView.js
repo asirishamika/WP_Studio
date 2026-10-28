@@ -5,6 +5,7 @@ import { h, formatDate, initials, avatarStyle } from '../ui.js';
 import { AVATAR_COLORS, STATUSES, STATUS_ORDER } from '../data.js';
 import * as credentialsSection from './credentialsSection.js';
 import * as vaultSection       from './vaultSection.js';
+import * as sitesSection       from './sitesSection.js';
 
 export function render() {
   const client = store.getClient(store.state.ui.clientId);
@@ -15,6 +16,7 @@ export function render() {
   const tab = store.state.ui.clientTab || 'projects';
   const creds = client.credentials || [];
   const files = client.files || [];
+  const sites = store.sitesOfClient(client.id);
 
   return `
     <div class="client-view">
@@ -44,6 +46,9 @@ export function render() {
         <button class="tab ${tab === 'projects' ? 'active' : ''}" data-action="switch-tab" data-tab="projects">
           Projects <span class="tab-count">${store.projectsOfClient(client.id).length}</span>
         </button>
+        <button class="tab ${tab === 'sites' ? 'active' : ''}" data-action="switch-tab" data-tab="sites">
+          🌐 Sites <span class="tab-count">${sites.length}</span>
+        </button>
         <button class="tab ${tab === 'credentials' ? 'active' : ''}" data-action="switch-tab" data-tab="credentials">
           🔐 Credentials <span class="tab-count">${creds.length}</span>
         </button>
@@ -54,6 +59,7 @@ export function render() {
 
       <div class="tab-panel">
         ${tab === 'projects' ? projectsPanel(client) : ''}
+        ${tab === 'sites' ? sitesSection.render() : ''}
         ${tab === 'credentials' ? credentialsSection.render() : ''}
         ${tab === 'files' ? vaultSection.render() : ''}
       </div>
@@ -135,4 +141,5 @@ export function wireEvents(root) {
   const tab = store.state.ui.clientTab || 'projects';
   if (tab === 'credentials') credentialsSection.wireEvents(root);
   if (tab === 'files')       vaultSection.wireEvents(root);
+  if (tab === 'sites')       sitesSection.wireEvents(root);
 }

@@ -14,8 +14,32 @@ export function render() {
     case 'edit-project':           return projectFormModal(store.getProject(m.projectId), null);
     case 'confirm-delete-client':  return confirmDeleteClient(m.clientId);
     case 'confirm-delete-project': return confirmDeleteProject(m.projectId);
+    case 'new-site':               return siteFormModal(null, m.clientId);
+    case 'edit-site':              return siteFormModal(store.getSite(m.siteId), null);
     default: return '';
   }
+}
+
+function siteFormModal(existing, prefillClientId) {
+  const isEdit = !!existing;
+  const s = existing || { url: '', label: '' };
+  const clientId = isEdit ? existing.clientId : prefillClientId;
+  return wrap(`
+    <div class="modal" data-stop>
+      <div class="m-hdr">
+        <div class="m-title">${isEdit ? 'Edit site' : 'Add site'}</div>
+        <div class="m-x" data-action="close-modal">×</div>
+      </div>
+      <div class="m-body">
+        <div class="field"><label>URL *</label><input id="f-url" value="${h(s.url)}" placeholder="https://example.com" autocomplete="off"></div>
+        <div class="field"><label>Label (optional)</label><input id="f-label" value="${h(s.label)}" placeholder="Production, Staging…"></div>
+      </div>
+      <div class="m-foot">
+        <button class="btn-ghost" data-action="close-modal">Cancel</button>
+        <button class="btn-primary" data-action="save-site" ${isEdit ? `data-id="${s.id}"` : `data-client="${clientId}"`}>${isEdit ? 'Save changes' : 'Add site'}</button>
+      </div>
+    </div>
+  `);
 }
 
 function wrap(inner) {
@@ -212,6 +236,16 @@ export function wireEvents(root) {
       const projectClient = store.getProject(id)?.clientId;
       store.deleteProject(id);
       store.uiMutate(ui => { ui.modal = null; ui.view = projectClient ? 'client' : 'today'; ui.projectId = null; ui.clientId = projectClient; });
+    } else if (a === 'save-site') {
+      const url = root.querySelector('#f-url').value.trim();
+      const label = root.querySelector('#f-label').value.trim();
+      if (!url) { root.querySelector('#f-url').focus(); return; }
+      if (el.dataset.id) {
+        store.updateSite(el.dataset.id, { url, label });
+      } else {
+        store.addSite({ url, label, clientId: el.dataset.client });
+      }
+      store.uiMutate(ui => { ui.modal = null; });
     }
   });
 
