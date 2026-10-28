@@ -1,14 +1,44 @@
 {
+  "id": "/",
   "name": "WP Studio",
   "short_name": "WP Studio",
-  "description": "Client tracker for solo web developers",
+  "description": "Private client tracker for solo web developers",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
   "orientation": "any",
   "background_color": "#f8f7f4",
   "theme_color": "#1a1814",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "business"],
+  "prefer_related_applications": false,
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Today",
+      "short_name": "Today",
+      "description": "Open the home screen",
+      "url": "/?view=today",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Sites",
+      "short_name": "Sites",
+      "description": "Site uptime + renewals",
+      "url": "/?view=sites",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Time reports",
+      "short_name": "Time",
+      "description": "Weekly time log",
+      "url": "/?view=time",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
   ]
 }

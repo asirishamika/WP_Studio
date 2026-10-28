@@ -566,6 +566,16 @@ a{color:inherit}
 .renewal-row.ren-soon .renewal-left{color:var(--amber);font-weight:600}
 .renewal-row.ren-ok .renewal-left{color:var(--em)}
 
+/* ── INSTALL CARD ─────────────────────────────────── */
+.install-steps{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.install-plat{padding:12px 14px;border:1px solid var(--bdr);border-radius:var(--r);background:var(--bg3)}
+.install-plat.active{border-color:var(--ink2);background:var(--bg2);box-shadow:var(--s1)}
+.install-plat-h{font-family:var(--ff-serif);font-size:13px;font-weight:600;letter-spacing:-.01em;margin-bottom:8px}
+.install-plat ol{margin:0;padding-left:20px;font-size:12.5px;color:var(--ink3);line-height:1.55}
+.install-plat ol li{margin-bottom:4px}
+.install-plat ol li strong{color:var(--ink)}
+.install-plat ol li em{color:var(--ink4);font-style:normal}
+
 /* ── MOBILE ───────────────────────────────────────── */
 @media(max-width:720px){
   .shell{flex-direction:column}

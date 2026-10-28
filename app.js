@@ -337,6 +337,18 @@ store.subscribe(() => {
   if (document.getElementById('app').classList.contains('show')) renderApp();
 });
 
+// ─── PWA install prompt capture ──────────────────────
+// Chrome/Edge fire 'beforeinstallprompt' when the app is installable.
+// We stash the event so the Settings → Install section can trigger it.
+window.installPromptEvent = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.installPromptEvent = e;
+});
+window.addEventListener('appinstalled', () => {
+  window.installPromptEvent = null;
+});
+
 // ─── keyboard: Ctrl+K / Cmd+K ────────────────────────
 document.addEventListener('keydown', (e) => {
   if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) {

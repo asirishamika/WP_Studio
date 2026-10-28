@@ -1,4 +1,4 @@
-const CACHE = 'wp-studio-v6';
+const CACHE = 'wp-studio-v7';
 const SHELL = [
   '/',
   '/index.html',
@@ -23,6 +23,7 @@ const SHELL = [
   '/views/timeReports.js',
   '/views/settings.js',
   '/icon.svg',
+  '/icon-maskable.svg',
   '/manifest.webmanifest'
 ];
 

@@ -127,6 +127,11 @@ export function render() {
         </div>
 
         <div class="settings-card">
+          <div class="settings-card-h">📲 Install this app</div>
+          ${installCard()}
+        </div>
+
+        <div class="settings-card">
           <div class="settings-card-h">About</div>
           <div class="settings-text">
             WP Studio — zero-knowledge client tracker for solo web developers.
@@ -136,6 +141,59 @@ export function render() {
             Last saved: ${store.state.lastSavedAt ? formatDate(store.state.lastSavedAt) + ' ' + new Date(store.state.lastSavedAt).toLocaleTimeString() : 'never'}
           </div>
         </div>
+      </div>
+    </div>
+  `;
+}
+
+function installCard() {
+  const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  if (standalone) {
+    return `
+      <div class="settings-text">
+        <span style="color:var(--em);font-weight:600">✓ Running as an installed app</span>
+      </div>
+      <div class="settings-text" style="font-size:11.5px;color:var(--ink4)">
+        You're inside the standalone WP Studio window — no browser chrome, taskbar/dock icon, dedicated windowing. Install it on any other device you use.
+      </div>
+    `;
+  }
+
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isAndroid = /Android/i.test(ua);
+  const isDesktop = !isIOS && !isAndroid;
+
+  return `
+    <div class="settings-text">Install WP Studio for a native-feeling app window with its own icon, no address bar, and offline access.</div>
+    <button class="btn-primary btn-sm" data-action="trigger-install" id="btn-install">⇩ Install on this device</button>
+    <div class="settings-text" style="font-size:11.5px;color:var(--ink4);margin-top:12px">
+      If the button is grayed, your browser didn't fire the install event — use the manual steps below.
+    </div>
+    <div class="install-steps">
+      <div class="install-plat ${isDesktop ? 'active' : ''}">
+        <div class="install-plat-h">💻 Desktop (Chrome / Edge / Brave)</div>
+        <ol>
+          <li>Click the <strong>install icon ⊕</strong> on the right of the address bar <em>or</em> the three-dot menu → <strong>Install WP Studio…</strong></li>
+          <li>Confirm. The app opens in its own window with a dedicated icon.</li>
+        </ol>
+      </div>
+      <div class="install-plat ${isAndroid ? 'active' : ''}">
+        <div class="install-plat-h">🤖 Android (Chrome)</div>
+        <ol>
+          <li>Tap the three-dot menu → <strong>Install app</strong> (or "Add to Home Screen").</li>
+          <li>Confirm. The app lands on your home screen like any native app.</li>
+        </ol>
+      </div>
+      <div class="install-plat ${isIOS ? 'active' : ''}">
+        <div class="install-plat-h">🍎 iPhone / iPad (Safari)</div>
+        <ol>
+          <li>Tap the <strong>Share button</strong> ⤴ at the bottom of Safari.</li>
+          <li>Scroll down → <strong>Add to Home Screen</strong>.</li>
+          <li>Confirm. Opens full-screen without the browser bar.</li>
+        </ol>
+        <div class="settings-text" style="font-size:11px;color:var(--ink4);margin-top:6px">Chrome on iOS does not support install — you need Safari for this one time.</div>
       </div>
     </div>
   `;
@@ -248,5 +306,31 @@ export function wireEvents(root) {
     if (a === 'export-encrypted') exportEncrypted();
     else if (a === 'export-plain') exportPlain();
     else if (a === 'wipe-all') wipeAll();
+    else if (a === 'trigger-install') triggerInstall();
   });
+
+  // Grey out the install button if no prompt event is available.
+  const btn = document.getElementById('btn-install');
+  if (btn && !window.installPromptEvent) {
+    btn.disabled = true;
+    btn.textContent = '⇩ Use manual steps below';
+  }
+}
+
+async function triggerInstall() {
+  const evt = window.installPromptEvent;
+  if (!evt) {
+    alert('Your browser did not expose the install prompt. Use the manual steps shown below for your device.');
+    return;
+  }
+  try {
+    evt.prompt();
+    const choice = await evt.userChoice;
+    if (choice && choice.outcome === 'accepted') {
+      window.installPromptEvent = null;
+      store.uiMutate(() => {});
+    }
+  } catch (e) {
+    alert('Install failed: ' + (e.message || e));
+  }
 }
