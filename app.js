@@ -34,6 +34,18 @@ function showApp() {
   document.getElementById('app').classList.add('show');
   renderApp();
   armIdleLock();
+  pullMonitorResults();
+}
+
+async function pullMonitorResults() {
+  try {
+    const r = await api.fetchMonitorResults();
+    if (r && Array.isArray(r.results) && r.results.length) {
+      store.mergeMonitorResults(r.results);
+    }
+  } catch (e) {
+    // Monitor is optional — ignore errors (e.g. first boot with no results yet).
+  }
 }
 
 function msg(screenName, text, kind) {

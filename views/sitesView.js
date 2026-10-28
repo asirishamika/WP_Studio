@@ -7,6 +7,15 @@ import { h, formatRelative } from '../ui.js';
 
 const inFlight = new Set();  // site ids currently being pinged
 
+async function syncMonitorList() {
+  try {
+    await api.putMonitorSites(store.monitoredSitesList());
+  } catch (e) {
+    console.warn('Monitor sync failed', e);
+  }
+}
+export { syncMonitorList };
+
 export function render() {
   const db = store.state.db;
   const sites = store.allSites();
@@ -21,6 +30,7 @@ export function render() {
         </div>
         <div style="display:flex;gap:8px">
           ${sites.length > 0 ? `<button class="btn-ghost btn-sm" data-action="check-all">↻ Check all</button>` : ''}
+          ${sites.some(s => s.monitored) ? `<button class="btn-ghost btn-sm" data-action="run-cron-now">⏰ Run cron now</button>` : ''}
         </div>
       </div>
 
@@ -75,6 +85,7 @@ export function siteRow(s) {
         <div class="site-url">
           <a href="${h(s.url)}" target="_blank" rel="noopener noreferrer">${h(stripScheme(s.url))}</a>
           ${s.label ? `<span class="site-label">${h(s.label)}</span>` : ''}
+          ${s.monitored ? '<span class="site-mon-badge" title="Monitored hourly by the Vercel cron">⏰ bg</span>' : ''}
         </div>
         <div class="site-meta">
           ${s.statusCode ? `<span>${s.statusCode}</span>` : ''}
@@ -86,6 +97,7 @@ export function siteRow(s) {
         </div>
       </div>
       <div class="site-acts">
+        <button class="file-btn ${s.monitored ? 'site-btn-mon' : ''}" data-action="toggle-monitor" data-id="${s.id}" title="${s.monitored ? 'Turn off background monitoring' : 'Monitor hourly in the background'}">${s.monitored ? '⏰' : '🕐'}</button>
         <button class="file-btn" data-action="check-site" data-id="${s.id}" title="Re-check">↻</button>
         <button class="file-btn" data-action="edit-site" data-id="${s.id}" title="Edit">✎</button>
         <button class="file-btn danger" data-action="delete-site" data-id="${s.id}" title="Delete">×</button>
@@ -167,6 +179,21 @@ export function wireEvents(root) {
     } else if (a === 'open-client') {
       e.preventDefault();
       store.uiMutate(ui => { ui.view = 'client'; ui.clientId = el.dataset.id; ui.clientTab = 'sites'; });
+    } else if (a === 'toggle-monitor') {
+      store.toggleSiteMonitored(el.dataset.id);
+      syncMonitorList();
+    } else if (a === 'run-cron-now') {
+      runCronNow();
     }
   });
+}
+
+async function runCronNow() {
+  try {
+    const r = await api.triggerCronNow();
+    const res = await api.fetchMonitorResults();
+    store.mergeMonitorResults(res.results || []);
+  } catch (e) {
+    alert('Background check failed: ' + (e.message || e));
+  }
 }

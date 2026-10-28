@@ -200,6 +200,7 @@ export function addSite(data) {
       clientId: data.clientId,
       url: data.url,
       label: data.label || '',
+      monitored: false,       // opt-in to background cron
       createdAt: now,
       checkedAt: null,
       up: null,
@@ -214,6 +215,48 @@ export function addSite(data) {
     });
   });
   return id;
+}
+
+// Toggle background cron monitoring for one site. The caller should
+// trigger syncMonitorSites() after to push the change to the server.
+export function toggleSiteMonitored(id) {
+  mutate(db => {
+    const s = db.sites.find(x => x.id === id);
+    if (!s) return;
+    s.monitored = !s.monitored;
+  });
+}
+
+// Merge an array of cron results (from /api/monitor/results) into the
+// local sites — only updates sites that are currently monitored and
+// only overwrites when the result is newer than what we have.
+export function mergeMonitorResults(results) {
+  if (!Array.isArray(results)) return 0;
+  let updated = 0;
+  mutate(db => {
+    for (const r of results) {
+      const s = db.sites.find(x => x.id === r.id);
+      if (!s) continue;
+      if (s.checkedAt && s.checkedAt >= r.checkedAt) continue;
+      s.checkedAt = r.checkedAt;
+      s.up = r.up;
+      s.statusCode = r.statusCode;
+      s.latencyMs = r.latencyMs;
+      s.sslDaysLeft = r.sslDaysLeft;
+      s.sslExpires = r.sslExpires;
+      s.isWordPress = r.isWordPress;
+      s.wpVersion = r.wpVersion;
+      s.error = r.error;
+      updated++;
+    }
+  });
+  return updated;
+}
+
+export function monitoredSitesList() {
+  return (state.db?.sites || [])
+    .filter(s => s.monitored)
+    .map(s => ({ id: s.id, url: s.url }));
 }
 
 export function updateSite(id, patch) {

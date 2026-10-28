@@ -95,3 +95,41 @@ export async function pingSite(url) {
   if (!r.ok) throw new Error('PING_FAILED_' + r.status);
   return r.json();
 }
+
+// ─── background monitor (opt-in site list + cron results) ──────────
+export async function fetchMonitorSites() {
+  const r = await fetch('/api/monitor/sites', { headers: { 'x-access-token': getToken() }});
+  if (r.status === 401) throw new Error('BAD_TOKEN');
+  if (!r.ok) throw new Error('MON_SITES_FAILED_' + r.status);
+  return r.json();  // { sites: [{id,url}], updatedAt }
+}
+
+export async function putMonitorSites(sites) {
+  const r = await fetch('/api/monitor/sites', {
+    method: 'PUT',
+    headers: {
+      'x-access-token': getToken(),
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ sites })
+  });
+  if (r.status === 401) throw new Error('BAD_TOKEN');
+  if (!r.ok) throw new Error('MON_SITES_PUT_FAILED_' + r.status);
+  return r.json();
+}
+
+export async function fetchMonitorResults() {
+  const r = await fetch('/api/monitor/results', { headers: { 'x-access-token': getToken() }});
+  if (r.status === 401) throw new Error('BAD_TOKEN');
+  if (!r.ok) throw new Error('MON_RESULTS_FAILED_' + r.status);
+  return r.json();  // { results: [...], ranAt }
+}
+
+export async function triggerCronNow() {
+  const r = await fetch('/api/cron/ping', {
+    headers: { 'x-access-token': getToken() }
+  });
+  if (r.status === 401) throw new Error('BAD_TOKEN');
+  if (!r.ok) throw new Error('CRON_FAILED_' + r.status);
+  return r.json();
+}

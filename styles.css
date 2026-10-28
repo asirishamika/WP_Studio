@@ -576,6 +576,10 @@ a{color:inherit}
 .install-plat ol li strong{color:var(--ink)}
 .install-plat ol li em{color:var(--ink4);font-style:normal}
 
+/* ── BG MONITOR BADGE ─────────────────────────────── */
+.site-mon-badge{font-family:var(--ff-mono);font-size:9px;padding:1px 6px;border-radius:4px;background:var(--em-bg);color:var(--em);border:1px solid var(--em-br)}
+.file-btn.site-btn-mon{background:var(--em-bg);color:var(--em);border-color:var(--em-br)}
+
 /* ── MOBILE ───────────────────────────────────────── */
 @media(max-width:720px){
   .shell{flex-direction:column}
