@@ -16,8 +16,54 @@ export function render() {
     case 'confirm-delete-project': return confirmDeleteProject(m.projectId);
     case 'new-site':               return siteFormModal(null, m.clientId);
     case 'edit-site':              return siteFormModal(store.getSite(m.siteId), null);
+    case 'add-log':                return logFormModal(null, m.when);
+    case 'edit-log':               return logFormModal(store.state.db.timeLogs.find(l => l.id === m.logId), null);
     default: return '';
   }
+}
+
+function logFormModal(existing, when) {
+  const isEdit = !!existing;
+  const task = isEdit ? store.getTask(existing.taskId) : null;
+  const endedAt = isEdit ? existing.endedAt : (when || Date.now());
+  const durationMin = isEdit ? Math.round((existing.durationSec || 0) / 60) : 30;
+  const dateStr = new Date(endedAt).toISOString().slice(0, 10);
+  const timeStr = new Date(endedAt).toTimeString().slice(0, 5);
+  const allTasks = store.allTasks();
+  const taskOptions = allTasks.map(t => {
+    const p = store.getProject(t.projectId);
+    const c = p ? store.getClient(p.clientId) : null;
+    const label = `${c?.name || '?'} · ${p?.name || '?'} · ${t.title}`;
+    return `<option value="${t.id}" ${isEdit && t.id === existing.taskId ? 'selected' : ''}>${h(label)}</option>`;
+  }).join('');
+
+  return wrap(`
+    <div class="modal" data-stop>
+      <div class="m-hdr">
+        <div class="m-title">${isEdit ? 'Edit log entry' : 'Add log entry'}</div>
+        <div class="m-x" data-action="close-modal">×</div>
+      </div>
+      <div class="m-body">
+        <div class="field">
+          <label>Task</label>
+          <select id="f-task">
+            ${isEdit ? '' : `<option value="">— pick a task —</option>`}
+            ${taskOptions}
+          </select>
+        </div>
+        <div class="frow3">
+          <div class="field"><label>Date</label><input id="f-date" type="date" value="${dateStr}"></div>
+          <div class="field"><label>End time</label><input id="f-time" type="time" value="${timeStr}"></div>
+          <div class="field"><label>Duration (minutes)</label><input id="f-duration" type="number" min="1" max="1440" value="${durationMin}"></div>
+        </div>
+        <div class="field"><label>Notes (optional)</label><input id="f-notes" value="${h(existing?.notes || '')}" placeholder="What you worked on…"></div>
+      </div>
+      <div class="m-foot">
+        <button class="btn-ghost" data-action="close-modal">Cancel</button>
+        <button class="btn-primary" data-action="save-log" ${isEdit ? `data-id="${existing.id}"` : ''}>${isEdit ? 'Save' : 'Add log'}</button>
+      </div>
+    </div>
+  `);
 }
 
 function siteFormModal(existing, prefillClientId) {
@@ -244,6 +290,33 @@ export function wireEvents(root) {
         store.updateSite(el.dataset.id, { url, label });
       } else {
         store.addSite({ url, label, clientId: el.dataset.client });
+      }
+      store.uiMutate(ui => { ui.modal = null; });
+    } else if (a === 'save-log') {
+      const taskId = root.querySelector('#f-task').value;
+      const date = root.querySelector('#f-date').value;
+      const time = root.querySelector('#f-time').value;
+      const minutes = parseInt(root.querySelector('#f-duration').value, 10) || 0;
+      const notes = root.querySelector('#f-notes').value;
+      if (!taskId) { root.querySelector('#f-task').focus(); return; }
+      if (!minutes || minutes <= 0) { root.querySelector('#f-duration').focus(); return; }
+      const endedAt = date && time ? new Date(`${date}T${time}`).getTime() : Date.now();
+      if (el.dataset.id) {
+        store.updateTimeLog(el.dataset.id, {
+          taskId,
+          endedAt,
+          startedAt: endedAt - minutes * 60000,
+          durationSec: minutes * 60,
+          notes
+        });
+      } else {
+        store.addManualTimeLog(taskId, minutes, endedAt);
+        if (notes) {
+          // Attach notes to the just-added log.
+          const logs = store.state.db.timeLogs;
+          const latest = logs[logs.length - 1];
+          if (latest) store.updateTimeLog(latest.id, { notes });
+        }
       }
       store.uiMutate(ui => { ui.modal = null; });
     }

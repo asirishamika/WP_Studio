@@ -9,6 +9,8 @@ import * as todayView   from '/views/today.js';
 import * as clientView  from '/views/clientView.js';
 import * as projectView from '/views/projectView.js';
 import * as sitesView   from '/views/sitesView.js';
+import * as timeReports from '/views/timeReports.js';
+import * as settingsView from '/views/settings.js';
 import * as modals      from '/views/modals.js';
 import * as palette     from '/views/palette.js';
 
@@ -153,6 +155,7 @@ function renderApp() {
 
         <nav class="sb-nav">
           <button class="sb-nav-item ${store.state.ui.view === 'today' ? 'active' : ''}" data-nav="today">🏠 Today</button>
+          <button class="sb-nav-item ${store.state.ui.view === 'time' ? 'active' : ''}" data-nav="time">📊 Time</button>
           <button class="sb-nav-item ${store.state.ui.view === 'sites' ? 'active' : ''}" data-nav="sites">
             🌐 Sites
             ${siteBadge()}
@@ -176,7 +179,8 @@ function renderApp() {
 
         <div class="sb-foot">
           <div class="sb-save">${saveStatus()}</div>
-          <button class="sb-lock" data-action="lock">🔒 Lock</button>
+          <button class="sb-lock" data-action="settings" title="Settings">⚙</button>
+          <button class="sb-lock" data-action="lock">🔒</button>
         </div>
       </aside>
 
@@ -192,10 +196,12 @@ function renderApp() {
   wireShell(app);
   const mainEl = document.getElementById('main-content');
   const view = store.state.ui.view;
-  if (view === 'today')   todayView.wireEvents(mainEl);
-  if (view === 'client')  clientView.wireEvents(mainEl);
-  if (view === 'project') projectView.wireEvents(mainEl);
-  if (view === 'sites')   sitesView.wireEvents(mainEl);
+  if (view === 'today')    todayView.wireEvents(mainEl);
+  if (view === 'client')   clientView.wireEvents(mainEl);
+  if (view === 'project')  projectView.wireEvents(mainEl);
+  if (view === 'sites')    sitesView.wireEvents(mainEl);
+  if (view === 'time')     timeReports.wireEvents(mainEl);
+  if (view === 'settings') settingsView.wireEvents(mainEl);
 
   const modalSlot = document.getElementById('modal-slot');
   if (modalSlot.children.length) modals.wireEvents(modalSlot);
@@ -219,10 +225,12 @@ function renderApp() {
 
 function mainContent() {
   const view = store.state.ui.view;
-  if (view === 'today')   return todayView.render();
-  if (view === 'client')  return clientView.render();
-  if (view === 'project') return projectView.render();
-  if (view === 'sites')   return sitesView.render();
+  if (view === 'today')    return todayView.render();
+  if (view === 'client')   return clientView.render();
+  if (view === 'project')  return projectView.render();
+  if (view === 'sites')    return sitesView.render();
+  if (view === 'time')     return timeReports.render();
+  if (view === 'settings') return settingsView.render();
   return todayView.render();
 }
 
@@ -294,6 +302,10 @@ function wireShell(app) {
       store.uiMutate(ui => { ui.view = 'today'; });
     } else if (el.dataset.nav === 'sites') {
       store.uiMutate(ui => { ui.view = 'sites'; });
+    } else if (el.dataset.nav === 'time') {
+      store.uiMutate(ui => { ui.view = 'time'; });
+    } else if (el.dataset.action === 'settings') {
+      store.uiMutate(ui => { ui.view = 'settings'; });
     } else if (el.dataset.action === 'open-client') {
       store.uiMutate(ui => { ui.view = 'client'; ui.clientId = el.dataset.id; ui.clientTab = 'projects'; });
     } else if (el.dataset.action === 'new-client') {
@@ -348,7 +360,8 @@ function lock() {
 function armIdleLock() {
   const reset = () => {
     clearTimeout(bootState.idleTimer);
-    bootState.idleTimer = setTimeout(lock, IDLE_LOCK_MS);
+    const mins = store.state.db?.settings?.idleLockMinutes || 30;
+    bootState.idleTimer = setTimeout(lock, mins * 60 * 1000);
   };
   reset();
   ['mousedown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, reset, { passive: true }));

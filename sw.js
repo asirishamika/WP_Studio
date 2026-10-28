@@ -1,4 +1,4 @@
-const CACHE = 'wp-studio-v4';
+const CACHE = 'wp-studio-v5';
 const SHELL = [
   '/',
   '/index.html',
@@ -18,6 +18,8 @@ const SHELL = [
   '/views/vaultSection.js',
   '/views/sitesView.js',
   '/views/sitesSection.js',
+  '/views/timeReports.js',
+  '/views/settings.js',
   '/icon.svg',
   '/manifest.webmanifest'
 ];

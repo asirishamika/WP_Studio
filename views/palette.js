@@ -29,7 +29,9 @@ function buildItems(q) {
 
   // Nav items
   base.push({ kind: 'nav', label: '🏠 Today', action: () => store.uiMutate(ui => { ui.view = 'today'; }) });
+  base.push({ kind: 'nav', label: '📊 Time reports', action: () => store.uiMutate(ui => { ui.view = 'time'; }) });
   base.push({ kind: 'nav', label: '🌐 Sites', action: () => store.uiMutate(ui => { ui.view = 'sites'; }) });
+  base.push({ kind: 'nav', label: '⚙ Settings', action: () => store.uiMutate(ui => { ui.view = 'settings'; }) });
   base.push({ kind: 'nav', label: '➕ New client', action: () => store.uiMutate(ui => { ui.modal = { kind: 'new-client' }; }) });
 
   // Clients

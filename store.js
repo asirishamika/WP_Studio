@@ -54,10 +54,22 @@ function ensureShape(db) {
   db.timeLogs = db.timeLogs || [];
   db.templates= db.templates|| [];
   db.settings = db.settings || {};
+  // Settings defaults.
+  if (db.settings.dailyBudgetMinutes == null) db.settings.dailyBudgetMinutes = 0;      // 0 = no budget
+  if (db.settings.pomodoroEnabled == null)    db.settings.pomodoroEnabled = false;
+  if (db.settings.pomodoroFocusMinutes == null) db.settings.pomodoroFocusMinutes = 25;
+  if (db.settings.pomodoroBreakMinutes == null) db.settings.pomodoroBreakMinutes = 5;
+  if (db.settings.idleLockMinutes == null)    db.settings.idleLockMinutes = 30;
   if (db.templates.length === 0) {
     db.templates = JSON.parse(JSON.stringify(BUILTIN_TEMPLATES));
   }
   return db;
+}
+
+export function updateSettings(patch) {
+  mutate(db => {
+    db.settings = { ...db.settings, ...patch };
+  });
 }
 
 // ─── mutate ──────────────────────────────────────────
@@ -458,15 +470,54 @@ export function getTask(id) {
 // ─── TIMER + TIME LOGS ───────────────────────────────
 // Timer state is session-only (not persisted). Each stop creates a TimeLog
 // which does persist in db.timeLogs.
+let pomodoroTimeout = null;
+
 export function startTimer(taskId) {
   // Stop any running timer first (and log it).
   if (state.timer) stopTimer();
-  state.timer = { taskId, startedAt: Date.now() };
+  const pomodoroEnabled = state.db?.settings?.pomodoroEnabled;
+  const focusMin = state.db?.settings?.pomodoroFocusMinutes || 25;
+  state.timer = {
+    taskId,
+    startedAt: Date.now(),
+    pomodoro: pomodoroEnabled,
+    focusMinutes: pomodoroEnabled ? focusMin : null
+  };
+  if (pomodoroEnabled) {
+    clearTimeout(pomodoroTimeout);
+    pomodoroTimeout = setTimeout(() => {
+      if (state.timer && state.timer.taskId === taskId) {
+        stopTimer();
+        pingBreak();
+      }
+    }, focusMin * 60 * 1000);
+  }
   emit();
+}
+
+function pingBreak() {
+  // Simple notification + beep.
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Pomodoro complete', { body: 'Take a short break.', icon: '/icon.svg' });
+    }
+  } catch {}
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 660;
+    g.gain.setValueAtTime(0.15, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    o.start();
+    o.stop(ctx.currentTime + 0.4);
+  } catch {}
 }
 
 export function stopTimer() {
   if (!state.timer) return null;
+  clearTimeout(pomodoroTimeout);
   const { taskId, startedAt } = state.timer;
   const endedAt = Date.now();
   const durationSec = Math.round((endedAt - startedAt) / 1000);
@@ -497,20 +548,21 @@ export function stopTimer() {
 }
 
 export function cancelTimer() {
+  clearTimeout(pomodoroTimeout);
   state.timer = null;
   emit();
 }
 
-export function addManualTimeLog(taskId, minutes) {
+export function addManualTimeLog(taskId, minutes, when) {
   if (!minutes || minutes <= 0) return;
-  const now = Date.now();
+  const endedAt = when || Date.now();
   const id = uid('tl');
   mutate(db => {
     db.timeLogs.push({
       id,
       taskId,
-      startedAt: now - minutes * 60000,
-      endedAt: now,
+      startedAt: endedAt - minutes * 60000,
+      endedAt,
       durationSec: minutes * 60,
       notes: 'manual'
     });
@@ -520,6 +572,53 @@ export function addManualTimeLog(taskId, minutes) {
       t.updatedAt = Date.now();
     }
   });
+}
+
+export function updateTimeLog(id, patch) {
+  mutate(db => {
+    const log = db.timeLogs.find(l => l.id === id);
+    if (!log) return;
+    const oldDurationSec = log.durationSec || 0;
+    Object.assign(log, patch);
+    // Recompute endedAt if duration changed and startedAt is kept.
+    if (patch.durationSec != null && !patch.endedAt) {
+      log.endedAt = log.startedAt + patch.durationSec * 1000;
+    }
+    const t = db.tasks.find(t => t.id === log.taskId);
+    if (t) {
+      const diffMin = Math.round(((log.durationSec || 0) - oldDurationSec) / 60);
+      t.actualMinutes = Math.max(0, (t.actualMinutes || 0) + diffMin);
+      t.updatedAt = Date.now();
+    }
+  });
+}
+
+export function deleteTimeLog(id) {
+  mutate(db => {
+    const log = db.timeLogs.find(l => l.id === id);
+    if (!log) return;
+    const minutes = Math.round((log.durationSec || 0) / 60);
+    db.timeLogs = db.timeLogs.filter(l => l.id !== id);
+    const t = db.tasks.find(t => t.id === log.taskId);
+    if (t) {
+      t.actualMinutes = Math.max(0, (t.actualMinutes || 0) - minutes);
+      t.updatedAt = Date.now();
+    }
+  });
+}
+
+export function logsInRange(startMs, endMs) {
+  if (!state.db?.timeLogs) return [];
+  return state.db.timeLogs.filter(l => l.endedAt >= startMs && l.endedAt < endMs);
+}
+
+export function logsOfDay(dayStart) {
+  const dayEnd = dayStart + 86400000;
+  return logsInRange(dayStart, dayEnd);
+}
+
+export function allTasks() {
+  return state.db?.tasks || [];
 }
 
 // Sum of time logs for a given task, in minutes.

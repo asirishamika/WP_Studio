@@ -28,6 +28,8 @@ export function render() {
         </div>
       </div>
 
+      ${budgetBar()}
+
       <div class="today-grid">
         <div class="today-col">
           ${siteAlertsBlock()}
@@ -112,6 +114,29 @@ function projectCard(p) {
         <div class="today-proj-bar"><div class="today-proj-bar-f" style="width:${prog.pct}%"></div></div>
       </div>
     </a>
+  `;
+}
+
+function budgetBar() {
+  const budget = store.state.db?.settings?.dailyBudgetMinutes || 0;
+  if (!budget) return '';
+  const logged = store.minutesLoggedToday();
+  const pct = Math.min(100, Math.round((logged / budget) * 100));
+  const over = logged > budget;
+  const status = over ? 'over'
+    : logged >= budget ? 'done'
+    : logged >= budget * 0.6 ? 'on-track'
+    : 'behind';
+  const label = over ? `${fmtMinsShort(logged - budget)} over` : status === 'done' ? 'Done ✓' : `${fmtMinsShort(budget - logged)} to go`;
+  return `
+    <div class="today-budget ${status}">
+      <div class="today-budget-row">
+        <div class="today-budget-l">Today's budget</div>
+        <div class="today-budget-v">${fmtMinsShort(logged)} / ${fmtMinsShort(budget)}</div>
+        <div class="today-budget-tag">${label}</div>
+      </div>
+      <div class="today-budget-bar"><div class="today-budget-fill" style="width:${pct}%"></div></div>
+    </div>
   `;
 }
 
