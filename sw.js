@@ -1,11 +1,19 @@
-const CACHE = 'wp-studio-v1';
+const CACHE = 'wp-studio-v2';
 const SHELL = [
   '/',
   '/index.html',
   '/styles.css',
   '/app.js',
   '/crypto.js',
+  '/api.js',
   '/store.js',
+  '/data.js',
+  '/ui.js',
+  '/views/today.js',
+  '/views/clientView.js',
+  '/views/projectView.js',
+  '/views/modals.js',
+  '/views/palette.js',
   '/icon.svg',
   '/manifest.webmanifest'
 ];
