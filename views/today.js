@@ -59,8 +59,8 @@ export function render() {
               <div class="today-stat-l">Done today</div>
             </div>
             <div class="today-stat">
-              <div class="today-stat-n">${openTasks.length}</div>
-              <div class="today-stat-l">Open tasks</div>
+              <div class="today-stat-n">${fmtMinsShort(store.minutesLoggedToday())}</div>
+              <div class="today-stat-l">Logged today</div>
             </div>
           </div>
 
@@ -90,6 +90,7 @@ function taskRow(t) {
           ${t.dueDate ? `<span class="t-row-due">${formatRelative(t.dueDate)}</span>` : ''}
         </div>
       </div>
+      <button class="t-row-timer" data-action="start-timer-row" data-id="${t.id}" title="Start timer">▶</button>
       <span class="t-pri p-${t.priority[0]}">${t.priority}</span>
     </div>
   `;
@@ -110,6 +111,14 @@ function projectCard(p) {
       </div>
     </a>
   `;
+}
+
+function fmtMinsShort(m) {
+  if (!m) return '0h';
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${h}h${rem}m` : `${h}h`;
 }
 
 function greet() {
@@ -135,6 +144,9 @@ export function wireEvents(root) {
     } else if (action === 'open-task') {
       // row clicks (non-checkbox) jump to the project
       store.uiMutate(ui => { ui.view = 'project'; ui.projectId = el.dataset.project; });
+    } else if (action === 'start-timer-row') {
+      e.stopPropagation();
+      store.startTimer(el.dataset.id);
     }
   });
 }

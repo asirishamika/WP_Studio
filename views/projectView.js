@@ -103,17 +103,38 @@ function phaseBlock(project, phase) {
 
 function taskItem(t) {
   const pri = PRIORITIES[t.priority] || PRIORITIES.medium;
+  const actual = store.actualMinutesForTask(t.id);
+  const est = t.estimateMinutes || 0;
+  const isTiming = store.state.timer && store.state.timer.taskId === t.id;
   return `
     <div class="task-item" data-task-id="${t.id}">
       <button class="t-check ${t.done ? 'done' : ''}" data-action="toggle-task" data-id="${t.id}"></button>
       <div class="t-body">
         <div class="t-title ${t.done ? 'struck' : ''}" data-action="edit-task-title" data-id="${t.id}">${h(t.title)}</div>
         ${t.hint ? `<div class="t-hint">${h(t.hint)}</div>` : ''}
+        <div class="t-time">
+          <span class="t-time-pill" data-action="edit-estimate" data-id="${t.id}" title="Click to set estimate">
+            est ${est ? fmtMins(est) : '—'}
+          </span>
+          <span class="t-time-pill ${actual > est && est > 0 ? 'over' : ''}" title="Logged time">
+            actual ${actual ? fmtMins(actual) : '—'}
+          </span>
+          <button class="t-timer-btn ${isTiming ? 'running' : ''}" data-action="${isTiming ? 'stop-task-timer' : 'start-task-timer'}" data-id="${t.id}">
+            ${isTiming ? '⏹ Stop' : '▶ Start'}
+          </button>
+        </div>
       </div>
       <span class="t-pri ${pri.cls}">${pri.label}</span>
       <button class="t-del" data-action="delete-task" data-id="${t.id}" title="Delete task">×</button>
     </div>
   `;
+}
+
+function fmtMins(m) {
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${h}h${rem}m` : `${h}h`;
 }
 
 export function wireEvents(root) {
@@ -166,8 +187,43 @@ export function wireEvents(root) {
       store.uiMutate(ui => { ui.modal = { kind: 'edit-project', projectId: store.state.ui.projectId }; });
     } else if (a === 'delete-project') {
       store.uiMutate(ui => { ui.modal = { kind: 'confirm-delete-project', projectId: store.state.ui.projectId }; });
+    } else if (a === 'start-task-timer') {
+      store.startTimer(el.dataset.id);
+    } else if (a === 'stop-task-timer') {
+      store.stopTimer();
+    } else if (a === 'edit-estimate') {
+      e.stopPropagation();
+      const task = store.getTask(el.dataset.id);
+      const current = task.estimateMinutes || '';
+      const raw = prompt('Estimate for this task (e.g. "45m", "2h", "1h30m"):', fmtEstimateInput(current));
+      if (raw === null) return;
+      const mins = parseEstimate(raw);
+      store.updateTask(el.dataset.id, { estimateMinutes: mins });
     }
   });
+
+  function fmtEstimateInput(m) {
+    if (!m) return '';
+    const h = Math.floor(m / 60), rem = m % 60;
+    if (h && rem) return `${h}h${rem}m`;
+    if (h) return `${h}h`;
+    return `${rem}m`;
+  }
+  function parseEstimate(s) {
+    if (!s) return null;
+    s = String(s).trim().toLowerCase().replace(/\s+/g, '');
+    if (!s) return null;
+    let total = 0;
+    const hMatch = s.match(/(\d+)\s*h/);
+    const mMatch = s.match(/(\d+)\s*m/);
+    if (hMatch) total += parseInt(hMatch[1], 10) * 60;
+    if (mMatch) total += parseInt(mMatch[1], 10);
+    if (!hMatch && !mMatch) {
+      const n = parseInt(s, 10);
+      if (!isNaN(n)) total = n; // bare number = minutes
+    }
+    return total > 0 ? total : null;
+  }
 
   root.addEventListener('change', (e) => {
     const el = e.target.closest('[data-action="change-status"]');

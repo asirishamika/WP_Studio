@@ -12,6 +12,7 @@ export const state = {
   saving: false,
   lastSavedAt: null,
   lastError: null,
+  timer: null,              // { taskId, startedAt } — active stopwatch (session-only)
   ui: {
     view: 'today',          // 'today' | 'clients' | 'client' | 'project' | 'templates'
     clientId: null,
@@ -388,6 +389,103 @@ export function tasksOfProject(projectId) {
 
 export function tasksOfPhase(projectId, phaseId) {
   return state.db?.tasks.filter(t => t.projectId === projectId && t.phaseId === phaseId) || [];
+}
+
+export function getTask(id) {
+  return state.db?.tasks.find(t => t.id === id) || null;
+}
+
+// ─── TIMER + TIME LOGS ───────────────────────────────
+// Timer state is session-only (not persisted). Each stop creates a TimeLog
+// which does persist in db.timeLogs.
+export function startTimer(taskId) {
+  // Stop any running timer first (and log it).
+  if (state.timer) stopTimer();
+  state.timer = { taskId, startedAt: Date.now() };
+  emit();
+}
+
+export function stopTimer() {
+  if (!state.timer) return null;
+  const { taskId, startedAt } = state.timer;
+  const endedAt = Date.now();
+  const durationSec = Math.round((endedAt - startedAt) / 1000);
+  state.timer = null;
+  if (durationSec < 10) {
+    // Discard tiny accidental timers (<10s).
+    emit();
+    return null;
+  }
+  const id = uid('tl');
+  mutate(db => {
+    db.timeLogs.push({
+      id,
+      taskId,
+      startedAt,
+      endedAt,
+      durationSec,
+      notes: ''
+    });
+    // Update task's cached actualMinutes for quick render.
+    const t = db.tasks.find(t => t.id === taskId);
+    if (t) {
+      t.actualMinutes = (t.actualMinutes || 0) + Math.round(durationSec / 60);
+      t.updatedAt = Date.now();
+    }
+  });
+  return id;
+}
+
+export function cancelTimer() {
+  state.timer = null;
+  emit();
+}
+
+export function addManualTimeLog(taskId, minutes) {
+  if (!minutes || minutes <= 0) return;
+  const now = Date.now();
+  const id = uid('tl');
+  mutate(db => {
+    db.timeLogs.push({
+      id,
+      taskId,
+      startedAt: now - minutes * 60000,
+      endedAt: now,
+      durationSec: minutes * 60,
+      notes: 'manual'
+    });
+    const t = db.tasks.find(t => t.id === taskId);
+    if (t) {
+      t.actualMinutes = (t.actualMinutes || 0) + minutes;
+      t.updatedAt = Date.now();
+    }
+  });
+}
+
+// Sum of time logs for a given task, in minutes.
+export function actualMinutesForTask(taskId) {
+  const t = getTask(taskId);
+  if (t?.actualMinutes != null) return t.actualMinutes;
+  // Fallback: compute from logs (migration path).
+  const logs = state.db?.timeLogs?.filter(l => l.taskId === taskId) || [];
+  return Math.round(logs.reduce((a, l) => a + (l.durationSec || 0), 0) / 60);
+}
+
+// Minutes logged today (across all tasks).
+export function minutesLoggedToday() {
+  if (!state.db?.timeLogs) return 0;
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const startMs = start.getTime();
+  let sec = 0;
+  for (const l of state.db.timeLogs) {
+    if (l.endedAt && l.endedAt >= startMs) sec += (l.durationSec || 0);
+  }
+  // Also count current running timer towards today's total.
+  if (state.timer && state.timer.startedAt >= startMs) {
+    sec += Math.round((Date.now() - state.timer.startedAt) / 1000);
+  }
+  return Math.round(sec / 60);
 }
 
 // ─── progress helpers ────────────────────────────────

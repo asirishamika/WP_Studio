@@ -155,6 +155,8 @@ function renderApp() {
           <button class="sb-nav-item" data-action="open-palette">⌘K Jump to…</button>
         </nav>
 
+        ${timerWidget()}
+
         <button class="sb-add" data-action="new-client">
           <svg width="12" height="12" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v11M1 6.5h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
           New Client
@@ -217,6 +219,35 @@ function mainContent() {
   return todayView.render();
 }
 
+function timerWidget() {
+  const t = store.state.timer;
+  if (!t) return '';
+  const task = store.getTask(t.taskId);
+  const project = task ? store.getProject(task.projectId) : null;
+  const elapsed = Math.round((Date.now() - t.startedAt) / 1000);
+  return `
+    <div class="timer-widget">
+      <div class="timer-widget-row">
+        <div class="timer-widget-dot"></div>
+        <div class="timer-widget-task" title="${h(task?.title || 'Task')}">${h(task?.title || 'Task')}</div>
+      </div>
+      <div class="timer-widget-sub">${project ? h(project.name) : ''}</div>
+      <div class="timer-widget-foot">
+        <div class="timer-widget-elapsed" id="timer-elapsed">${formatElapsed(elapsed)}</div>
+        <button class="timer-widget-stop" data-action="stop-timer">Stop & log</button>
+      </div>
+    </div>
+  `;
+}
+
+function formatElapsed(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function clientSidebarRow(c) {
   const prog = store.clientProgress(c.id);
   const active = store.state.ui.view === 'client' && store.state.ui.clientId === c.id;
@@ -255,9 +286,22 @@ function wireShell(app) {
       lock();
     } else if (el.dataset.action === 'open-palette') {
       palette.open();
+    } else if (el.dataset.action === 'stop-timer') {
+      store.stopTimer();
     }
   });
 }
+
+// ─── timer ticker ────────────────────────────────────
+// 1-second interval that updates only the elapsed display.
+setInterval(() => {
+  const t = store.state.timer;
+  if (!t) return;
+  const el = document.getElementById('timer-elapsed');
+  if (!el) return;
+  const elapsed = Math.round((Date.now() - t.startedAt) / 1000);
+  el.textContent = formatElapsed(elapsed);
+}, 1000);
 
 // Re-render on any state change.
 store.subscribe(() => {
@@ -276,6 +320,8 @@ document.addEventListener('keydown', (e) => {
 
 // ─── lock / idle ─────────────────────────────────────
 function lock() {
+  // Log any running timer before locking.
+  if (store.state.timer) store.stopTimer();
   cryptoLib.lock();
   store.setDb(null);
   bootState.blobBytes = null;
