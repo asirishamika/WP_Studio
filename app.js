@@ -147,8 +147,13 @@ function renderApp() {
       }
     : null;
 
+  const drawerOpen = store.state.ui.drawerOpen;
   app.innerHTML = `
-    <div class="shell">
+    ${mobileTopBar()}
+
+    <div class="shell ${drawerOpen ? 'drawer-open' : ''}">
+      <div class="drawer-backdrop" data-action="close-drawer"></div>
+
       <aside class="sb">
         <div class="sb-brand">
           <div class="sb-brand-ico">
@@ -201,6 +206,8 @@ function renderApp() {
       </main>
     </div>
 
+    ${mobileBottomNav()}
+
     <div id="modal-slot">${modals.render()}</div>
     <div id="palette-slot">${palette.render()}</div>
   `;
@@ -252,6 +259,64 @@ function siteBadge() {
   const count = a.down.length + a.sslExpired.length + r.expired.length + r.upcoming.length;
   if (count === 0) return '';
   return `<span class="nav-badge nav-badge-warn">${count}</span>`;
+}
+
+function mobileTopBar() {
+  const v = store.state.ui.view;
+  const client = store.state.ui.clientId ? store.getClient(store.state.ui.clientId) : null;
+  const project = store.state.ui.projectId ? store.getProject(store.state.ui.projectId) : null;
+  let title = 'WP Studio';
+  let showBack = false;
+  if (v === 'today') title = 'Today';
+  else if (v === 'time') title = 'Time';
+  else if (v === 'sites') title = 'Sites';
+  else if (v === 'settings') title = 'Settings';
+  else if (v === 'client' && client) { title = client.name; showBack = true; }
+  else if (v === 'project' && project) { title = project.name; showBack = true; }
+
+  return `
+    <header class="mobile-top">
+      <button class="mobile-top-btn" data-action="${showBack ? 'go-back' : 'open-drawer'}" aria-label="${showBack ? 'Back' : 'Menu'}">
+        ${showBack ? `
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        ` : `
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        `}
+      </button>
+      <div class="mobile-top-title">${h(title)}</div>
+      <button class="mobile-top-btn" data-action="open-palette" aria-label="Search">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </header>
+  `;
+}
+
+function mobileBottomNav() {
+  const v = store.state.ui.view;
+  const r = store.renewalAlerts(30);
+  const a = store.siteAlerts();
+  const siteCount = a.down.length + a.sslExpired.length + r.expired.length + r.upcoming.length;
+  const item = (nav, icon, label, badge) => `
+    <button class="mb-nav-item ${v === nav ? 'active' : ''}" data-nav="${nav}" aria-label="${label}">
+      <div class="mb-nav-icon">${icon}${badge ? `<span class="mb-nav-badge">${badge}</span>` : ''}</div>
+      <div class="mb-nav-label">${label}</div>
+    </button>
+  `;
+  return `
+    <nav class="mobile-bottom">
+      ${item('today', '🏠', 'Today', 0)}
+      ${item('time', '📊', 'Time', 0)}
+      ${item('sites', '🌐', 'Sites', siteCount)}
+      <button class="mb-nav-item mb-nav-item-fab" data-action="open-drawer" aria-label="Clients">
+        <div class="mb-nav-icon">👥</div>
+        <div class="mb-nav-label">Clients</div>
+      </button>
+      <button class="mb-nav-item" data-action="settings" aria-label="Settings">
+        <div class="mb-nav-icon">⚙</div>
+        <div class="mb-nav-label">Settings</div>
+      </button>
+    </nav>
+  `;
 }
 
 function timerWidget() {
@@ -329,7 +394,26 @@ function wireShell(app) {
       palette.open();
     } else if (el.dataset.action === 'stop-timer') {
       store.stopTimer();
+    } else if (el.dataset.action === 'open-drawer') {
+      store.uiMutate(ui => { ui.drawerOpen = true; });
+    } else if (el.dataset.action === 'close-drawer') {
+      store.uiMutate(ui => { ui.drawerOpen = false; });
+    } else if (el.dataset.action === 'go-back') {
+      store.uiMutate(ui => {
+        if (ui.view === 'project') { ui.view = 'client'; ui.projectId = null; }
+        else if (ui.view === 'client') { ui.view = 'today'; ui.clientId = null; }
+        else ui.view = 'today';
+      });
     }
+  });
+
+  // Auto-close drawer when a sidebar item is tapped (mobile).
+  app.querySelectorAll('.sb [data-nav], .sb [data-action="open-client"], .sb [data-action="new-client"], .sb [data-action="settings"]').forEach(el => {
+    el.addEventListener('click', () => {
+      if (window.matchMedia('(max-width: 760px)').matches) {
+        setTimeout(() => store.uiMutate(ui => { ui.drawerOpen = false; }), 50);
+      }
+    });
   });
 }
 

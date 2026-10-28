@@ -19,6 +19,7 @@ export const state = {
     projectId: null,
     clientTab: 'projects',  // 'projects' | 'credentials' | 'files'
     paletteOpen: false,
+    drawerOpen: false,      // mobile sidebar drawer
     modal: null,            // { kind, ...payload }
   }
 };
