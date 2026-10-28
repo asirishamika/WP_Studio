@@ -16,6 +16,7 @@ export const state = {
     view: 'today',          // 'today' | 'clients' | 'client' | 'project' | 'templates'
     clientId: null,
     projectId: null,
+    clientTab: 'projects',  // 'projects' | 'credentials' | 'files'
     paletteOpen: false,
     modal: null,            // { kind, ...payload }
   }
@@ -137,6 +138,9 @@ export function addClient(data) {
       contactEmail: data.contactEmail || '',
       avatarIndex: data.avatarIndex ?? 0,
       notes: data.notes || '',
+      credentials: [],
+      files: [],
+      bitwardenCollection: '',
       createdAt: now,
       updatedAt: now
     });
@@ -159,6 +163,91 @@ export function deleteClient(id) {
     db.projects = db.projects.filter(p => p.clientId !== id);
     db.tasks = db.tasks.filter(t => !projectIds.includes(t.projectId));
     db.sites = db.sites.filter(s => s.clientId !== id);
+  });
+}
+
+// ─── CREDENTIALS (per client, encrypted via main DB) ─────────
+export function addCredential(clientId, data) {
+  const id = uid('cr');
+  const now = Date.now();
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c) return;
+    if (!c.credentials) c.credentials = [];
+    c.credentials.push({
+      id,
+      label: data.label || 'New credential',
+      url: data.url || '',
+      username: data.username || '',
+      password: data.password || '',
+      notes: data.notes || '',
+      createdAt: now,
+      updatedAt: now
+    });
+    c.updatedAt = now;
+  });
+  return id;
+}
+
+export function updateCredential(clientId, credId, patch) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c || !c.credentials) return;
+    const cr = c.credentials.find(x => x.id === credId);
+    if (!cr) return;
+    Object.assign(cr, patch, { updatedAt: Date.now() });
+    c.updatedAt = Date.now();
+  });
+}
+
+export function deleteCredential(clientId, credId) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c || !c.credentials) return;
+    c.credentials = c.credentials.filter(x => x.id !== credId);
+    c.updatedAt = Date.now();
+  });
+}
+
+// ─── VAULT FILES (ciphertext blobs; metadata in main DB) ─────
+// This records the file in the DB. The actual upload must already have
+// completed via api.putVaultFile(id, encryptedBytes).
+export function recordVaultFile(clientId, meta) {
+  const now = Date.now();
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c) return;
+    if (!c.files) c.files = [];
+    c.files.push({
+      id: meta.id,                 // the blob key (uuid)
+      name: meta.name,
+      size: meta.size,             // plaintext size
+      type: meta.type,             // mime
+      tag: meta.tag || '',         // credential | doc | asset | tutorial | handover | other
+      pinned: !!meta.pinned,
+      uploadedAt: now
+    });
+    c.updatedAt = now;
+  });
+}
+
+export function updateVaultFile(clientId, fileId, patch) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c || !c.files) return;
+    const f = c.files.find(x => x.id === fileId);
+    if (!f) return;
+    Object.assign(f, patch);
+    c.updatedAt = Date.now();
+  });
+}
+
+export function removeVaultFile(clientId, fileId) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c || !c.files) return;
+    c.files = c.files.filter(f => f.id !== fileId);
+    c.updatedAt = Date.now();
   });
 }
 

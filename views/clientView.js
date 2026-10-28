@@ -1,16 +1,20 @@
-// Client detail view — client info header + their projects list.
+// Client detail view — client info header + tabs: Projects | Credentials | Files.
 
 import * as store from '../store.js';
 import { h, formatDate, initials, avatarStyle } from '../ui.js';
 import { AVATAR_COLORS, STATUSES, STATUS_ORDER } from '../data.js';
+import * as credentialsSection from './credentialsSection.js';
+import * as vaultSection       from './vaultSection.js';
 
 export function render() {
   const client = store.getClient(store.state.ui.clientId);
   if (!client) {
     return `<div class="placeholder"><h2>Client not found</h2><p>It may have been deleted.</p></div>`;
   }
-  const projects = store.projectsOfClient(client.id);
   const prog = store.clientProgress(client.id);
+  const tab = store.state.ui.clientTab || 'projects';
+  const creds = client.credentials || [];
+  const files = client.files || [];
 
   return `
     <div class="client-view">
@@ -36,20 +40,42 @@ export function render() {
         </div>
       </div>
 
-      <div class="section-hdr">
-        <div class="section-title">Projects</div>
-        <button class="btn-primary btn-sm" data-action="new-project">+ New Project</button>
+      <div class="tabs">
+        <button class="tab ${tab === 'projects' ? 'active' : ''}" data-action="switch-tab" data-tab="projects">
+          Projects <span class="tab-count">${store.projectsOfClient(client.id).length}</span>
+        </button>
+        <button class="tab ${tab === 'credentials' ? 'active' : ''}" data-action="switch-tab" data-tab="credentials">
+          🔐 Credentials <span class="tab-count">${creds.length}</span>
+        </button>
+        <button class="tab ${tab === 'files' ? 'active' : ''}" data-action="switch-tab" data-tab="files">
+          📁 Files <span class="tab-count">${files.length}</span>
+        </button>
       </div>
 
-      ${projects.length === 0
-        ? `<div class="empty-section">
-            <div class="empty-ico">📋</div>
-            <div class="empty-t">No projects yet</div>
-            <div class="empty-s">Start a project to track phases and tasks for this client.</div>
-            <button class="btn-primary" data-action="new-project">Create first project</button>
-          </div>`
-        : `<div class="proj-grid">${projects.map(p => projectCard(p)).join('')}</div>`}
+      <div class="tab-panel">
+        ${tab === 'projects' ? projectsPanel(client) : ''}
+        ${tab === 'credentials' ? credentialsSection.render() : ''}
+        ${tab === 'files' ? vaultSection.render() : ''}
+      </div>
     </div>
+  `;
+}
+
+function projectsPanel(client) {
+  const projects = store.projectsOfClient(client.id);
+  return `
+    <div class="section-hdr">
+      <div class="section-title">Projects</div>
+      <button class="btn-primary btn-sm" data-action="new-project">+ New Project</button>
+    </div>
+    ${projects.length === 0
+      ? `<div class="empty-section">
+          <div class="empty-ico">📋</div>
+          <div class="empty-t">No projects yet</div>
+          <div class="empty-s">Start a project to track phases and tasks for this client.</div>
+          <button class="btn-primary" data-action="new-project">Create first project</button>
+        </div>`
+      : `<div class="proj-grid">${projects.map(p => projectCard(p)).join('')}</div>`}
   `;
 }
 
@@ -90,6 +116,8 @@ export function wireEvents(root) {
       store.uiMutate(ui => { ui.modal = { kind: 'edit-client', clientId: store.state.ui.clientId }; });
     } else if (a === 'delete-client') {
       store.uiMutate(ui => { ui.modal = { kind: 'confirm-delete-client', clientId: store.state.ui.clientId }; });
+    } else if (a === 'switch-tab') {
+      store.uiMutate(ui => { ui.clientTab = el.dataset.tab; });
     }
   });
 
@@ -102,4 +130,9 @@ export function wireEvents(root) {
       store.updateClient(store.state.ui.clientId, { notes: val });
     }, 500);
   });
+
+  // Delegate to tab-specific wiring.
+  const tab = store.state.ui.clientTab || 'projects';
+  if (tab === 'credentials') credentialsSection.wireEvents(root);
+  if (tab === 'files')       vaultSection.wireEvents(root);
 }

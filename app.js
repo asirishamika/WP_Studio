@@ -248,7 +248,7 @@ function wireShell(app) {
     if (el.dataset.nav === 'today') {
       store.uiMutate(ui => { ui.view = 'today'; });
     } else if (el.dataset.action === 'open-client') {
-      store.uiMutate(ui => { ui.view = 'client'; ui.clientId = el.dataset.id; });
+      store.uiMutate(ui => { ui.view = 'client'; ui.clientId = el.dataset.id; ui.clientTab = 'projects'; });
     } else if (el.dataset.action === 'new-client') {
       store.uiMutate(ui => { ui.modal = { kind: 'new-client' }; });
     } else if (el.dataset.action === 'lock') {

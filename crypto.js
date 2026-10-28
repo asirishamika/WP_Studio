@@ -70,3 +70,25 @@ export async function encrypt(data) {
   out.set(new Uint8Array(ct), SALT_LEN + IV_LEN);
   return out;
 }
+
+// Encrypt raw bytes (for file vault). Same session key, no JSON step.
+export async function encryptBytes(bytes) {
+  if (!sKey || !sSalt) throw new Error('LOCKED');
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sKey, bytes);
+  const out = new Uint8Array(SALT_LEN + IV_LEN + ct.byteLength);
+  out.set(sSalt, 0);
+  out.set(iv, SALT_LEN);
+  out.set(new Uint8Array(ct), SALT_LEN + IV_LEN);
+  return out;
+}
+
+// Decrypt bytes previously produced by encryptBytes. Returns a Uint8Array.
+export async function decryptBytes(blobBytes) {
+  if (!sKey) throw new Error('LOCKED');
+  if (blobBytes.length < SALT_LEN + IV_LEN + 16) throw new Error('CORRUPT_BLOB');
+  const iv = blobBytes.slice(SALT_LEN, SALT_LEN + IV_LEN);
+  const ct = blobBytes.slice(SALT_LEN + IV_LEN);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sKey, ct);
+  return new Uint8Array(pt);
+}
