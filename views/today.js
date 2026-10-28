@@ -142,13 +142,16 @@ function budgetBar() {
 
 function siteAlertsBlock() {
   const alerts = store.siteAlerts();
+  const ren = store.renewalAlerts(30);
   const down = alerts.down;
   const sslSoon = alerts.sslSoon;
   const sslExpired = alerts.sslExpired;
-  if (down.length === 0 && sslSoon.length === 0 && sslExpired.length === 0) return '';
+  if (down.length === 0 && sslSoon.length === 0 && sslExpired.length === 0 && ren.upcoming.length === 0 && ren.expired.length === 0) return '';
+
+  const KIND_ICON = { domain: '🌐', hosting: '🖥️', ssl: '🔒', plugin: '🧩', other: '📦' };
   return `
     <div class="today-section today-alerts">
-      <div class="today-section-h today-section-warn">⚠ Site alerts</div>
+      <div class="today-section-h today-section-warn">⚠ Alerts</div>
       ${down.map(s => `
         <div class="today-alert" data-action="open-sites">
           <span class="site-dot down"></span>
@@ -159,6 +162,18 @@ function siteAlertsBlock() {
         <div class="today-alert" data-action="open-sites">
           <span class="today-alert-icon">🔒</span>
           <span class="today-alert-label">SSL expired for <strong>${h(stripScheme(s.url))}</strong></span>
+        </div>
+      `).join('')}
+      ${ren.expired.map(r => `
+        <div class="today-alert" data-action="open-client-sites" data-id="${r.clientId}">
+          <span class="today-alert-icon">${KIND_ICON[r.kind] || '📦'}</span>
+          <span class="today-alert-label"><strong>${h(r.item || r.kind)}</strong> (${h(r.clientName)}) expired ${-r.daysLeft}d ago</span>
+        </div>
+      `).join('')}
+      ${ren.upcoming.map(r => `
+        <div class="today-alert" data-action="open-client-sites" data-id="${r.clientId}">
+          <span class="today-alert-icon">${KIND_ICON[r.kind] || '📦'}</span>
+          <span class="today-alert-label">${h(r.kind)} for <strong>${h(r.item || r.clientName)}</strong> expires in ${r.daysLeft}d</span>
         </div>
       `).join('')}
       ${sslSoon.map(s => `
@@ -211,6 +226,8 @@ export function wireEvents(root) {
       store.startTimer(el.dataset.id);
     } else if (action === 'open-sites') {
       store.uiMutate(ui => { ui.view = 'sites'; });
+    } else if (action === 'open-client-sites') {
+      store.uiMutate(ui => { ui.view = 'client'; ui.clientId = el.dataset.id; ui.clientTab = 'sites'; });
     }
   });
 }

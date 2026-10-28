@@ -236,7 +236,8 @@ function mainContent() {
 
 function siteBadge() {
   const a = store.siteAlerts();
-  const count = a.down.length + a.sslExpired.length;
+  const r = store.renewalAlerts(30);
+  const count = a.down.length + a.sslExpired.length + r.expired.length + r.upcoming.length;
   if (count === 0) return '';
   return `<span class="nav-badge nav-badge-warn">${count}</span>`;
 }

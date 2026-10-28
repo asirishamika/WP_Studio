@@ -60,6 +60,13 @@ function ensureShape(db) {
   if (db.settings.pomodoroFocusMinutes == null) db.settings.pomodoroFocusMinutes = 25;
   if (db.settings.pomodoroBreakMinutes == null) db.settings.pomodoroBreakMinutes = 5;
   if (db.settings.idleLockMinutes == null)    db.settings.idleLockMinutes = 30;
+  if (!db.settings.business)                  db.settings.business = { name: '', email: '', phone: '', website: '', address: '' };
+  // Backfill maintenance/renewal fields on existing clients.
+  for (const c of db.clients) {
+    if (c.hasMaintenance == null) c.hasMaintenance = false;
+    if (!c.maintenanceEntries) c.maintenanceEntries = [];
+    if (!c.renewals) c.renewals = [];
+  }
   if (db.templates.length === 0) {
     db.templates = JSON.parse(JSON.stringify(BUILTIN_TEMPLATES));
   }
@@ -154,6 +161,10 @@ export function addClient(data) {
       credentials: [],
       files: [],
       bitwardenCollection: '',
+      hasMaintenance: !!data.hasMaintenance,
+      maintenancePlan: data.maintenancePlan || null,  // { fee, frequency, startedAt }
+      maintenanceEntries: [],                          // [{id,date,task,notes,sent}]
+      renewals: [],                                    // [{id,kind,provider,expiresAt,cost,autoRenew,url,notes}]
       createdAt: now,
       updatedAt: now
     });
@@ -237,6 +248,144 @@ export function siteAlerts() {
   const sslSoon = sites.filter(s => typeof s.sslDaysLeft === 'number' && s.sslDaysLeft <= 14 && s.sslDaysLeft >= 0);
   const sslExpired = sites.filter(s => typeof s.sslDaysLeft === 'number' && s.sslDaysLeft < 0);
   return { down, sslSoon, sslExpired };
+}
+
+// ─── MAINTENANCE (per client) ────────────────────────
+export function toggleMaintenance(clientId, enabled) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c) return;
+    c.hasMaintenance = enabled === undefined ? !c.hasMaintenance : !!enabled;
+    if (!c.maintenanceEntries) c.maintenanceEntries = [];
+    c.updatedAt = Date.now();
+  });
+}
+
+export function setMaintenancePlan(clientId, plan) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c) return;
+    c.maintenancePlan = plan || null;
+    c.updatedAt = Date.now();
+  });
+}
+
+export function addMaintenanceEntry(clientId, data) {
+  const id = uid('me');
+  const now = Date.now();
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c) return;
+    if (!c.maintenanceEntries) c.maintenanceEntries = [];
+    c.maintenanceEntries.push({
+      id,
+      date: data.date || new Date().toISOString().slice(0, 10),
+      task: data.task || 'Untitled work',
+      notes: data.notes || '',
+      hoursSpent: data.hoursSpent || null,
+      sent: !!data.sent,
+      createdAt: now
+    });
+    c.updatedAt = now;
+  });
+  return id;
+}
+
+export function updateMaintenanceEntry(clientId, entryId, patch) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c || !c.maintenanceEntries) return;
+    const e = c.maintenanceEntries.find(x => x.id === entryId);
+    if (!e) return;
+    Object.assign(e, patch);
+    c.updatedAt = Date.now();
+  });
+}
+
+export function deleteMaintenanceEntry(clientId, entryId) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c || !c.maintenanceEntries) return;
+    c.maintenanceEntries = c.maintenanceEntries.filter(e => e.id !== entryId);
+    c.updatedAt = Date.now();
+  });
+}
+
+export function clientsWithMaintenance() {
+  return state.db?.clients.filter(c => c.hasMaintenance) || [];
+}
+
+// ─── RENEWALS (per client — domains, hosting, licences) ──────
+export function addRenewal(clientId, data) {
+  const id = uid('rn');
+  const now = Date.now();
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c) return;
+    if (!c.renewals) c.renewals = [];
+    c.renewals.push({
+      id,
+      kind: data.kind || 'domain',           // domain | hosting | ssl | plugin | other
+      provider: data.provider || '',
+      item: data.item || '',                 // e.g. "example.com", "WP Rocket licence"
+      expiresAt: data.expiresAt || '',       // ISO date
+      cost: data.cost || '',
+      autoRenew: !!data.autoRenew,
+      url: data.url || '',                   // management panel URL
+      notes: data.notes || '',
+      createdAt: now,
+      updatedAt: now
+    });
+    c.updatedAt = now;
+  });
+  return id;
+}
+
+export function updateRenewal(clientId, renewalId, patch) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c || !c.renewals) return;
+    const r = c.renewals.find(x => x.id === renewalId);
+    if (!r) return;
+    Object.assign(r, patch, { updatedAt: Date.now() });
+    c.updatedAt = Date.now();
+  });
+}
+
+export function deleteRenewal(clientId, renewalId) {
+  mutate(db => {
+    const c = db.clients.find(c => c.id === clientId);
+    if (!c || !c.renewals) return;
+    c.renewals = c.renewals.filter(r => r.id !== renewalId);
+    c.updatedAt = Date.now();
+  });
+}
+
+export function allRenewals() {
+  const out = [];
+  const clients = state.db?.clients || [];
+  for (const c of clients) {
+    for (const r of (c.renewals || [])) out.push({ ...r, clientId: c.id, clientName: c.name });
+  }
+  return out;
+}
+
+export function renewalAlerts(windowDays = 30) {
+  const now = Date.now();
+  const soon = now + windowDays * 86400000;
+  const all = allRenewals();
+  const expired = [];
+  const upcoming = [];
+  for (const r of all) {
+    if (!r.expiresAt) continue;
+    const exp = new Date(r.expiresAt).getTime();
+    if (isNaN(exp)) continue;
+    if (exp < now) expired.push({ ...r, daysLeft: Math.round((exp - now) / 86400000) });
+    else if (exp <= soon) upcoming.push({ ...r, daysLeft: Math.round((exp - now) / 86400000) });
+  }
+  upcoming.sort((a, b) => a.daysLeft - b.daysLeft);
+  expired.sort((a, b) => b.daysLeft - a.daysLeft); // most-recently-expired first
+  return { upcoming, expired };
 }
 
 // ─── CREDENTIALS (per client, encrypted via main DB) ─────────

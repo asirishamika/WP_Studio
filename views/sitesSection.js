@@ -1,15 +1,18 @@
-// Per-client Sites tab — just this client's sites.
+// Per-client Sites tab — renewals + monitored sites.
 
 import * as store from '../store.js';
-import { siteRow, autoCheckStale, wireEvents as wireSitesView } from './sitesView.js';
+import { siteRow, wireEvents as wireSitesView } from './sitesView.js';
+import * as renewals from './renewalsSection.js';
 
 export function render() {
   const clientId = store.state.ui.clientId;
   const sites = store.sitesOfClient(clientId);
   return `
     <div class="sites-section">
-      <div class="section-hdr">
-        <div class="section-title">Sites (${sites.length})</div>
+      ${renewals.render(clientId)}
+
+      <div class="section-hdr" style="margin-top:22px">
+        <div class="section-title">Monitored sites (${sites.length})</div>
         <button class="btn-primary btn-sm" data-action="new-site">+ Add site</button>
       </div>
       ${sites.length === 0
@@ -26,6 +29,7 @@ export function render() {
 
 export function wireEvents(root) {
   wireSitesView(root);
+  renewals.wireEvents(root);
   root.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action="new-site"]');
     if (el) {

@@ -6,6 +6,7 @@ import { AVATAR_COLORS, STATUSES, STATUS_ORDER } from '../data.js';
 import * as credentialsSection from './credentialsSection.js';
 import * as vaultSection       from './vaultSection.js';
 import * as sitesSection       from './sitesSection.js';
+import * as maintenanceSection from './maintenanceSection.js';
 
 export function render() {
   const client = store.getClient(store.state.ui.clientId);
@@ -28,6 +29,7 @@ export function render() {
             ${client.niche ? `<span class="ch-tag">${h(client.niche)}</span>` : ''}
             ${client.contactName ? `<span class="ch-tag">👤 ${h(client.contactName)}</span>` : ''}
             ${client.contactEmail ? `<span class="ch-tag"><a href="mailto:${h(client.contactEmail)}">✉️ ${h(client.contactEmail)}</a></span>` : ''}
+            ${client.hasMaintenance ? `<span class="ch-tag ch-tag-maint">🛠 Maintenance plan</span>` : ''}
           </div>
           <textarea class="ch-notes" placeholder="Notes about this client…" data-action="save-client-notes">${h(client.notes || '')}</textarea>
         </div>
@@ -46,8 +48,12 @@ export function render() {
         <button class="tab ${tab === 'projects' ? 'active' : ''}" data-action="switch-tab" data-tab="projects">
           Projects <span class="tab-count">${store.projectsOfClient(client.id).length}</span>
         </button>
+        ${client.hasMaintenance ? `
+          <button class="tab ${tab === 'maintenance' ? 'active' : ''}" data-action="switch-tab" data-tab="maintenance">
+            🛠 Maintenance <span class="tab-count">${(client.maintenanceEntries || []).length}</span>
+          </button>` : ''}
         <button class="tab ${tab === 'sites' ? 'active' : ''}" data-action="switch-tab" data-tab="sites">
-          🌐 Sites <span class="tab-count">${sites.length}</span>
+          🌐 Sites <span class="tab-count">${sites.length + (client.renewals || []).length}</span>
         </button>
         <button class="tab ${tab === 'credentials' ? 'active' : ''}" data-action="switch-tab" data-tab="credentials">
           🔐 Credentials <span class="tab-count">${creds.length}</span>
@@ -59,6 +65,7 @@ export function render() {
 
       <div class="tab-panel">
         ${tab === 'projects' ? projectsPanel(client) : ''}
+        ${tab === 'maintenance' && client.hasMaintenance ? maintenanceSection.render() : ''}
         ${tab === 'sites' ? sitesSection.render() : ''}
         ${tab === 'credentials' ? credentialsSection.render() : ''}
         ${tab === 'files' ? vaultSection.render() : ''}
@@ -142,4 +149,5 @@ export function wireEvents(root) {
   if (tab === 'credentials') credentialsSection.wireEvents(root);
   if (tab === 'files')       vaultSection.wireEvents(root);
   if (tab === 'sites')       sitesSection.wireEvents(root);
+  if (tab === 'maintenance') maintenanceSection.wireEvents(root);
 }

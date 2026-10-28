@@ -18,8 +18,100 @@ export function render() {
     case 'edit-site':              return siteFormModal(store.getSite(m.siteId), null);
     case 'add-log':                return logFormModal(null, m.when);
     case 'edit-log':               return logFormModal(store.state.db.timeLogs.find(l => l.id === m.logId), null);
+    case 'new-renewal':            return renewalFormModal(null, m.clientId);
+    case 'edit-renewal':           return renewalFormModal(findRenewal(m.clientId, m.renewalId), m.clientId);
+    case 'add-maint-entry':        return maintEntryFormModal(null, m.clientId);
+    case 'edit-maint-entry':       return maintEntryFormModal(findMaintEntry(m.clientId, m.entryId), m.clientId);
     default: return '';
   }
+}
+
+function findRenewal(clientId, id) {
+  const c = store.getClient(clientId);
+  return c?.renewals?.find(r => r.id === id) || null;
+}
+function findMaintEntry(clientId, id) {
+  const c = store.getClient(clientId);
+  return c?.maintenanceEntries?.find(e => e.id === id) || null;
+}
+
+function renewalFormModal(existing, clientId) {
+  const isEdit = !!existing;
+  const r = existing || { kind: 'domain', provider: '', item: '', expiresAt: '', cost: '', autoRenew: false, url: '', notes: '' };
+  return wrap(`
+    <div class="modal" data-stop>
+      <div class="m-hdr">
+        <div class="m-title">${isEdit ? 'Edit renewal' : 'Add renewal'}</div>
+        <div class="m-x" data-action="close-modal">×</div>
+      </div>
+      <div class="m-body">
+        <div class="frow2">
+          <div class="field">
+            <label>Kind</label>
+            <select id="f-kind">
+              <option value="domain"  ${r.kind === 'domain'  ? 'selected' : ''}>🌐 Domain</option>
+              <option value="hosting" ${r.kind === 'hosting' ? 'selected' : ''}>🖥️ Hosting</option>
+              <option value="ssl"     ${r.kind === 'ssl'     ? 'selected' : ''}>🔒 SSL</option>
+              <option value="plugin"  ${r.kind === 'plugin'  ? 'selected' : ''}>🧩 Plugin / licence</option>
+              <option value="other"   ${r.kind === 'other'   ? 'selected' : ''}>📦 Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Expires on *</label><input id="f-expires" type="date" value="${h(r.expiresAt)}"></div>
+        </div>
+        <div class="frow2">
+          <div class="field"><label>Item</label><input id="f-item" value="${h(r.item)}" placeholder="example.com, Hostinger renewal, WP Rocket licence…"></div>
+          <div class="field"><label>Provider</label><input id="f-provider" value="${h(r.provider)}" placeholder="Namecheap, Hostinger, GoDaddy…"></div>
+        </div>
+        <div class="frow2">
+          <div class="field"><label>Cost (optional)</label><input id="f-cost" value="${h(r.cost)}" placeholder="$14/year"></div>
+          <div class="field"><label>Auto-renew?</label>
+            <label class="switch" style="margin-top:4px">
+              <input type="checkbox" id="f-autorenew" ${r.autoRenew ? 'checked' : ''}>
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="field"><label>Management URL (optional)</label><input id="f-url" value="${h(r.url)}" placeholder="https://hpanel.hostinger.com/…"></div>
+        <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Any specifics the client should know…">${h(r.notes || '')}</textarea></div>
+      </div>
+      <div class="m-foot">
+        <button class="btn-ghost" data-action="close-modal">Cancel</button>
+        <button class="btn-primary" data-action="save-renewal" ${isEdit ? `data-id="${r.id}" data-client="${clientId}"` : `data-client="${clientId}"`}>${isEdit ? 'Save' : 'Add renewal'}</button>
+      </div>
+    </div>
+  `);
+}
+
+function maintEntryFormModal(existing, clientId) {
+  const isEdit = !!existing;
+  const e = existing || { date: new Date().toISOString().slice(0, 10), task: '', notes: '', hoursSpent: '', sent: false };
+  return wrap(`
+    <div class="modal" data-stop>
+      <div class="m-hdr">
+        <div class="m-title">${isEdit ? 'Edit maintenance entry' : 'Log maintenance work'}</div>
+        <div class="m-x" data-action="close-modal">×</div>
+      </div>
+      <div class="m-body">
+        <div class="frow2">
+          <div class="field"><label>Date *</label><input id="f-date" type="date" value="${h(e.date)}"></div>
+          <div class="field"><label>Hours spent (optional)</label><input id="f-hours" value="${h(e.hoursSpent || '')}" placeholder="e.g. 0.5"></div>
+        </div>
+        <div class="field"><label>Task *</label><input id="f-task" value="${h(e.task)}" placeholder="e.g. Monthly updates & backup check"></div>
+        <div class="field"><label>Notes (shown on the client's report)</label><textarea id="f-notes" placeholder="Updated WP core, 12 plugins, scanned for malware (clean), tested backup restore…">${h(e.notes || '')}</textarea></div>
+        <div class="field" style="flex-direction:row;align-items:center;gap:10px">
+          <label class="switch">
+            <input type="checkbox" id="f-sent" ${e.sent ? 'checked' : ''}>
+            <span class="switch-slider"></span>
+          </label>
+          <div><div class="settings-row-l">Already sent to client</div><div class="settings-row-s">Mark if you've already shared this specific entry.</div></div>
+        </div>
+      </div>
+      <div class="m-foot">
+        <button class="btn-ghost" data-action="close-modal">Cancel</button>
+        <button class="btn-primary" data-action="save-maint-entry" ${isEdit ? `data-id="${e.id}" data-client="${clientId}"` : `data-client="${clientId}"`}>${isEdit ? 'Save' : 'Log it'}</button>
+      </div>
+    </div>
+  `);
 }
 
 function logFormModal(existing, when) {
@@ -117,6 +209,13 @@ function clientFormModal(existing) {
               <div class="csw ${i === (c.avatarIndex ?? 0) ? 'sel' : ''}" data-action="pick-avatar" data-idx="${i}" style="background:${col.bg}"></div>
             `).join('')}
           </div>
+        </div>
+        <div class="field" style="flex-direction:row;align-items:center;gap:10px">
+          <label class="switch">
+            <input type="checkbox" id="f-hasMaintenance" ${c.hasMaintenance ? 'checked' : ''}>
+            <span class="switch-slider"></span>
+          </label>
+          <div><div class="settings-row-l">On a maintenance plan</div><div class="settings-row-s">Adds a Maintenance tab for logging ongoing work and exporting client-ready reports.</div></div>
         </div>
         <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Anything useful about this client…">${h(c.notes || '')}</textarea></div>
       </div>
@@ -238,12 +337,13 @@ export function wireEvents(root) {
       root.querySelectorAll('.csw').forEach((e, i) => e.classList.toggle('sel', i === selectedAvatar));
     } else if (a === 'save-client') {
       const data = {
-        name:         root.querySelector('#f-name').value.trim(),
-        niche:        root.querySelector('#f-niche').value.trim(),
-        contactName:  root.querySelector('#f-contactName').value.trim(),
-        contactEmail: root.querySelector('#f-contactEmail').value.trim(),
-        notes:        root.querySelector('#f-notes').value,
-        avatarIndex:  selectedAvatar
+        name:            root.querySelector('#f-name').value.trim(),
+        niche:           root.querySelector('#f-niche').value.trim(),
+        contactName:     root.querySelector('#f-contactName').value.trim(),
+        contactEmail:    root.querySelector('#f-contactEmail').value.trim(),
+        notes:           root.querySelector('#f-notes').value,
+        avatarIndex:     selectedAvatar,
+        hasMaintenance:  root.querySelector('#f-hasMaintenance').checked
       };
       if (!data.name) { root.querySelector('#f-name').focus(); return; }
       if (el.dataset.id) {
@@ -290,6 +390,41 @@ export function wireEvents(root) {
         store.updateSite(el.dataset.id, { url, label });
       } else {
         store.addSite({ url, label, clientId: el.dataset.client });
+      }
+      store.uiMutate(ui => { ui.modal = null; });
+    } else if (a === 'save-renewal') {
+      const data = {
+        kind:       root.querySelector('#f-kind').value,
+        item:       root.querySelector('#f-item').value.trim(),
+        provider:   root.querySelector('#f-provider').value.trim(),
+        expiresAt:  root.querySelector('#f-expires').value,
+        cost:       root.querySelector('#f-cost').value.trim(),
+        autoRenew:  root.querySelector('#f-autorenew').checked,
+        url:        root.querySelector('#f-url').value.trim(),
+        notes:      root.querySelector('#f-notes').value
+      };
+      if (!data.expiresAt) { root.querySelector('#f-expires').focus(); return; }
+      const clientId = el.dataset.client;
+      if (el.dataset.id) {
+        store.updateRenewal(clientId, el.dataset.id, data);
+      } else {
+        store.addRenewal(clientId, data);
+      }
+      store.uiMutate(ui => { ui.modal = null; });
+    } else if (a === 'save-maint-entry') {
+      const data = {
+        date:        root.querySelector('#f-date').value,
+        task:        root.querySelector('#f-task').value.trim(),
+        notes:       root.querySelector('#f-notes').value,
+        hoursSpent:  root.querySelector('#f-hours').value.trim(),
+        sent:        root.querySelector('#f-sent').checked
+      };
+      if (!data.task) { root.querySelector('#f-task').focus(); return; }
+      const clientId = el.dataset.client;
+      if (el.dataset.id) {
+        store.updateMaintenanceEntry(clientId, el.dataset.id, data);
+      } else {
+        store.addMaintenanceEntry(clientId, data);
       }
       store.uiMutate(ui => { ui.modal = null; });
     } else if (a === 'save-log') {

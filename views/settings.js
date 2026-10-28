@@ -26,6 +26,31 @@ export function render() {
 
       <div class="settings-grid">
         <div class="settings-card">
+          <div class="settings-card-h">🧾 Your business</div>
+          <div class="settings-text">Used as the footer on every maintenance report PDF. Leave blank to omit.</div>
+          <div class="settings-row">
+            <div><div class="settings-row-l">Business name</div></div>
+            <input class="settings-input" value="${h(s.business?.name || '')}" placeholder="Your Studio Ltd." data-setting-biz="name">
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row-l">Email</div></div>
+            <input class="settings-input" value="${h(s.business?.email || '')}" placeholder="hello@yourstudio.com" data-setting-biz="email">
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row-l">Phone</div></div>
+            <input class="settings-input" value="${h(s.business?.phone || '')}" placeholder="+94 ..." data-setting-biz="phone">
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row-l">Website</div></div>
+            <input class="settings-input" value="${h(s.business?.website || '')}" placeholder="yourstudio.com" data-setting-biz="website">
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row-l">Address</div></div>
+            <input class="settings-input" value="${h(s.business?.address || '')}" placeholder="Colombo, Sri Lanka" data-setting-biz="address">
+          </div>
+        </div>
+
+        <div class="settings-card">
           <div class="settings-card-h">⏱ Time</div>
 
           <div class="settings-row">
@@ -182,10 +207,18 @@ async function wipeAll() {
   store.uiMutate(ui => { ui.view = 'today'; });
 }
 
+let bizTimer = null;
+
 export function wireEvents(root) {
   root.addEventListener('change', (e) => {
-    const el = e.target.closest('[data-setting]');
+    const el = e.target.closest('[data-setting], [data-setting-biz]');
     if (!el) return;
+    if (el.dataset.settingBiz) {
+      const key = el.dataset.settingBiz;
+      const biz = { ...(store.state.db.settings.business || {}), [key]: el.value };
+      store.updateSettings({ business: biz });
+      return;
+    }
     const key = el.dataset.setting;
     const parse = el.dataset.parse;
     let value;
@@ -194,6 +227,18 @@ export function wireEvents(root) {
     else if (parse === 'duration') value = parseDuration(el.value);
     else value = el.value;
     store.updateSettings({ [key]: value });
+  });
+
+  // Also save business inputs on blur for live-typing experience.
+  root.addEventListener('input', (e) => {
+    const el = e.target.closest('[data-setting-biz]');
+    if (!el) return;
+    clearTimeout(bizTimer);
+    bizTimer = setTimeout(() => {
+      const key = el.dataset.settingBiz;
+      const biz = { ...(store.state.db.settings.business || {}), [key]: el.value };
+      store.updateSettings({ business: biz });
+    }, 500);
   });
 
   root.addEventListener('click', (e) => {
