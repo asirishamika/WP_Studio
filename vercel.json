@@ -4,7 +4,7 @@
     "api/cron/ping.js": { "maxDuration": 60 }
   },
   "crons": [
-    { "path": "/api/cron/ping", "schedule": "0 * * * *" }
+    { "path": "/api/cron/ping", "schedule": "0 9 * * *" }
   ],
   "headers": [
     {
