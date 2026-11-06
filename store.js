@@ -115,14 +115,21 @@ async function doSave() {
   state.dirty = false;
   emit();
   try {
-    // Conflict check: did someone else write a newer version since we loaded?
+    // Conflict check: did someone else write a strictly newer version since we loaded?
+    // Compare as timestamps to avoid string/format false positives.
     const head = await api.headBlob().catch(() => null);
-    if (head && head.updatedAt && state.serverUpdatedAt && head.updatedAt !== state.serverUpdatedAt) {
-      state.conflict = true;
-      state.saving = false;
-      state.dirty = true;
-      emit();
-      return;
+    if (head && head.updatedAt && state.serverUpdatedAt) {
+      const theirMs = new Date(head.updatedAt).getTime();
+      const ourMs = new Date(state.serverUpdatedAt).getTime();
+      // Only trigger when server is more than 2s newer than our baseline —
+      // guards against tiny clock/metadata drift inside the storage layer.
+      if (!isNaN(theirMs) && !isNaN(ourMs) && theirMs - ourMs > 2000) {
+        state.conflict = true;
+        state.saving = false;
+        state.dirty = true;
+        emit();
+        return;
+      }
     }
     const bytes = await cryptoLib.encrypt(state.db);
     const result = await api.putBlob(bytes);

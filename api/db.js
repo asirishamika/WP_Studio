@@ -35,6 +35,14 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'unauthorized' });
   }
 
+  // Normalize Vercel Blob's uploadedAt (Date or string) to a canonical ISO string.
+  const toIso = (v) => {
+    if (!v) return '';
+    if (v instanceof Date) return v.toISOString();
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? String(v) : d.toISOString();
+  };
+
   try {
     if (req.method === 'GET' || req.method === 'HEAD') {
       let info;
@@ -52,7 +60,7 @@ export default async function handler(req, res) {
         }
         throw e;
       }
-      res.setHeader('X-Blob-Updated-At', info.uploadedAt || '');
+      res.setHeader('X-Blob-Updated-At', toIso(info.uploadedAt));
       res.setHeader('Cache-Control', 'no-store');
       if (req.method === 'HEAD') {
         return res.status(200).end();
@@ -74,7 +82,7 @@ export default async function handler(req, res) {
         allowOverwrite: true,
         contentType: 'application/octet-stream'
       });
-      return res.status(200).json({ ok: true, uploadedAt: blob.uploadedAt, size: body.length });
+      return res.status(200).json({ ok: true, uploadedAt: toIso(blob.uploadedAt), size: body.length });
     }
 
     res.setHeader('Allow', 'GET, HEAD, PUT');
