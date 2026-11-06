@@ -265,8 +265,6 @@ async function wipeAll() {
   store.uiMutate(ui => { ui.view = 'today'; });
 }
 
-let bizTimer = null;
-
 export function wireEvents(root) {
   root.addEventListener('change', (e) => {
     const el = e.target.closest('[data-setting], [data-setting-biz]');
@@ -287,17 +285,8 @@ export function wireEvents(root) {
     store.updateSettings({ [key]: value });
   });
 
-  // Also save business inputs on blur for live-typing experience.
-  root.addEventListener('input', (e) => {
-    const el = e.target.closest('[data-setting-biz]');
-    if (!el) return;
-    clearTimeout(bizTimer);
-    bizTimer = setTimeout(() => {
-      const key = el.dataset.settingBiz;
-      const biz = { ...(store.state.db.settings.business || {}), [key]: el.value };
-      store.updateSettings({ business: biz });
-    }, 500);
-  });
+  // Business fields save on blur (change event above). Autosaving mid-type
+  // would re-render the view and drop the mobile keyboard, so we don't.
 
   root.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action]');
