@@ -92,3 +92,21 @@ export async function decryptBytes(blobBytes) {
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sKey, ct);
   return new Uint8Array(pt);
 }
+
+// Decrypt a full main-DB blob using the already-unlocked session key.
+// Used by the conflict-reload path, which refetches a newer server copy
+// without re-prompting for the password.
+export async function decryptDbBlob(blobBytes) {
+  if (!sKey) throw new Error('LOCKED');
+  if (blobBytes.length < SALT_LEN + IV_LEN + 16) throw new Error('CORRUPT_BLOB');
+  const iv = blobBytes.slice(SALT_LEN, SALT_LEN + IV_LEN);
+  const ct = blobBytes.slice(SALT_LEN + IV_LEN);
+  let pt;
+  try {
+    pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sKey, ct);
+  } catch {
+    // Vault was likely re-keyed elsewhere — caller needs to re-unlock.
+    throw new Error('WRONG_KEY');
+  }
+  return JSON.parse(new TextDecoder().decode(pt));
+}

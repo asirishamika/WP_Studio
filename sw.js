@@ -1,4 +1,4 @@
-const CACHE = 'wp-studio-v10';
+const CACHE = 'wp-studio-v11';
 const SHELL = [
   '/',
   '/index.html',

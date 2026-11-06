@@ -12,7 +12,9 @@ export const state = {
   saving: false,
   lastSavedAt: null,
   lastError: null,
-  timer: null,              // { taskId, startedAt } — active stopwatch (session-only)
+  serverUpdatedAt: null,    // ISO string from X-Blob-Updated-At; used for conflict detection
+  conflict: false,          // true when server has a newer version than what we loaded
+  timer: null,              // { taskId, startedAt } — active stopwatch
   ui: {
     view: 'today',          // 'today' | 'clients' | 'client' | 'project' | 'templates'
     clientId: null,
@@ -108,14 +110,24 @@ function scheduleSave() {
 async function doSave() {
   if (!state.db || !cryptoLib.isUnlocked()) return;
   if (state.saving) { scheduleSave(); return; }
+  if (state.conflict) return; // blocked until user decides reload vs overwrite
   state.saving = true;
-  const wasDirty = state.dirty;
   state.dirty = false;
   emit();
   try {
+    // Conflict check: did someone else write a newer version since we loaded?
+    const head = await api.headBlob().catch(() => null);
+    if (head && head.updatedAt && state.serverUpdatedAt && head.updatedAt !== state.serverUpdatedAt) {
+      state.conflict = true;
+      state.saving = false;
+      state.dirty = true;
+      emit();
+      return;
+    }
     const bytes = await cryptoLib.encrypt(state.db);
     const result = await api.putBlob(bytes);
     state.lastSavedAt = result.uploadedAt ? new Date(result.uploadedAt).getTime() : Date.now();
+    if (result.uploadedAt) state.serverUpdatedAt = result.uploadedAt;
     state.lastError = null;
   } catch (e) {
     state.dirty = true; // mark dirty again so we retry later
@@ -124,6 +136,38 @@ async function doSave() {
   } finally {
     state.saving = false;
     emit();
+  }
+}
+
+// Called by the conflict modal. "overwrite" skips the conflict check and
+// force-saves; "reload" throws away local changes and refetches.
+export async function resolveConflict(choice) {
+  if (!state.conflict) return;
+  if (choice === 'overwrite') {
+    // Clear the server-updatedAt check so doSave() proceeds, then save.
+    state.conflict = false;
+    state.serverUpdatedAt = null;
+    emit();
+    await flushSave();
+  } else if (choice === 'reload') {
+    // Fetch the newer server copy, decrypt, replace local db.
+    try {
+      state.saving = true;
+      emit();
+      const r = await api.fetchBlobWithMeta();
+      if (!r || !r.bytes) throw new Error('No blob');
+      const db = await cryptoLib.decryptDbBlob(r.bytes);
+      state.db = ensureShape(db);
+      state.serverUpdatedAt = r.updatedAt || state.serverUpdatedAt;
+      state.conflict = false;
+      state.dirty = false;
+      state.lastError = null;
+    } catch (e) {
+      state.lastError = 'Reload failed: ' + (e.message || e);
+    } finally {
+      state.saving = false;
+      emit();
+    }
   }
 }
 
@@ -661,9 +705,57 @@ export function getTask(id) {
 }
 
 // ─── TIMER + TIME LOGS ───────────────────────────────
-// Timer state is session-only (not persisted). Each stop creates a TimeLog
-// which does persist in db.timeLogs.
+// Timer survives tab/app close via localStorage. The actual start time is
+// stored as an absolute ms, so elapsed is still correct after a reload.
+// Each stop creates a TimeLog in db.timeLogs.
+const TIMER_LS_KEY = 'wp-studio-active-timer';
 let pomodoroTimeout = null;
+
+function persistTimer() {
+  try {
+    if (state.timer) localStorage.setItem(TIMER_LS_KEY, JSON.stringify(state.timer));
+    else localStorage.removeItem(TIMER_LS_KEY);
+  } catch {}
+}
+
+// Called by app bootstrap after db is loaded — restores a running timer
+// from a previous session if the task still exists.
+export function restoreTimer() {
+  try {
+    const raw = localStorage.getItem(TIMER_LS_KEY);
+    if (!raw || !state.db) return false;
+    const t = JSON.parse(raw);
+    if (!t || !t.taskId || !t.startedAt) return false;
+    if (!state.db.tasks.find(x => x.id === t.taskId)) {
+      localStorage.removeItem(TIMER_LS_KEY);
+      return false;
+    }
+    state.timer = t;
+    // Re-arm pomodoro cutoff based on remaining time.
+    if (t.pomodoro && t.focusMinutes) {
+      const elapsedMs = Date.now() - t.startedAt;
+      const totalMs = t.focusMinutes * 60 * 1000;
+      const remaining = totalMs - elapsedMs;
+      if (remaining <= 0) {
+        // Already past the pomodoro window — stop now.
+        stopTimer();
+        pingBreak();
+        return true;
+      }
+      clearTimeout(pomodoroTimeout);
+      pomodoroTimeout = setTimeout(() => {
+        if (state.timer && state.timer.taskId === t.taskId) {
+          stopTimer();
+          pingBreak();
+        }
+      }, remaining);
+    }
+    emit();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function startTimer(taskId) {
   // Stop any running timer first (and log it).
@@ -676,6 +768,7 @@ export function startTimer(taskId) {
     pomodoro: pomodoroEnabled,
     focusMinutes: pomodoroEnabled ? focusMin : null
   };
+  persistTimer();
   if (pomodoroEnabled) {
     clearTimeout(pomodoroTimeout);
     pomodoroTimeout = setTimeout(() => {
@@ -715,6 +808,7 @@ export function stopTimer() {
   const endedAt = Date.now();
   const durationSec = Math.round((endedAt - startedAt) / 1000);
   state.timer = null;
+  persistTimer();
   if (durationSec < 10) {
     // Discard tiny accidental timers (<10s).
     emit();
@@ -743,6 +837,7 @@ export function stopTimer() {
 export function cancelTimer() {
   clearTimeout(pomodoroTimeout);
   state.timer = null;
+  persistTimer();
   emit();
 }
 

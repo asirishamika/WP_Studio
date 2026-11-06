@@ -779,3 +779,35 @@ a{color:inherit}
   .mobile-top-title{font-size:15px}
   .main-content{padding:12px}
 }
+
+/* ── Save status dot (mobile top bar) ── */
+.save-dot{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:8px;vertical-align:middle;flex-shrink:0;
+  background:var(--em);
+}
+.save-dot-ok{background:var(--em)}
+.save-dot-dirty{background:var(--warn,#c99a3a)}
+.save-dot-saving{background:var(--info,#4a90c9);animation:pulseDot 1.1s ease-in-out infinite}
+.save-dot-err{background:var(--rose);animation:pulseDot 1.1s ease-in-out infinite}
+.save-dot-conflict{background:var(--rose);animation:pulseDot .8s ease-in-out infinite}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── Backup nag banner ── */
+.backup-nag{
+  display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+  padding:14px 16px;margin-bottom:18px;
+  background:linear-gradient(135deg, rgba(201,154,58,.08), rgba(201,154,58,.03));
+  border:1px solid rgba(201,154,58,.3);border-radius:12px;
+}
+.backup-nag-h{font-weight:600;margin-bottom:2px;font-size:14px}
+.backup-nag-s{font-size:13px;color:var(--ink3);line-height:1.45}
+.backup-nag-acts{display:flex;gap:8px;flex-shrink:0}
+@media(max-width:600px){
+  .backup-nag{padding:12px}
+  .backup-nag-acts{width:100%;flex-direction:column}
+  .backup-nag-acts .btn-primary,.backup-nag-acts .btn-ghost{width:100%}
+}
+
+/* ── Conflict modal sizing ── */
+.modal-sm{max-width:420px}

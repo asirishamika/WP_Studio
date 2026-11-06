@@ -27,6 +27,32 @@ export async function fetchBlob() {
   return new Uint8Array(buf);
 }
 
+// Same as fetchBlob but also returns the server's updatedAt header so the
+// caller can track it for conflict detection.
+export async function fetchBlobWithMeta() {
+  const r = await fetch(API_URL, {
+    headers: { 'x-access-token': getToken() }
+  });
+  if (r.status === 404) return null;
+  if (r.status === 401) throw new Error('BAD_TOKEN');
+  if (!r.ok) throw new Error('FETCH_FAILED_' + r.status);
+  const buf = await r.arrayBuffer();
+  return { bytes: new Uint8Array(buf), updatedAt: r.headers.get('X-Blob-Updated-At') || '' };
+}
+
+// Lightweight HEAD request to check the server's current updatedAt
+// without downloading the ciphertext.
+export async function headBlob() {
+  const r = await fetch(API_URL, {
+    method: 'HEAD',
+    headers: { 'x-access-token': getToken() }
+  });
+  if (r.status === 404) return { updatedAt: '' };
+  if (r.status === 401) throw new Error('BAD_TOKEN');
+  if (!r.ok) throw new Error('HEAD_FAILED_' + r.status);
+  return { updatedAt: r.headers.get('X-Blob-Updated-At') || '' };
+}
+
 export async function putBlob(bytes) {
   const r = await fetch(API_URL, {
     method: 'PUT',

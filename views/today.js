@@ -28,6 +28,8 @@ export function render() {
         </div>
       </div>
 
+      ${backupNag()}
+
       ${budgetBar()}
 
       <div class="today-grid">
@@ -207,6 +209,47 @@ function greet() {
   return 'Late night.';
 }
 
+function backupNag() {
+  const s = store.state.db?.settings || {};
+  const now = Date.now();
+  // Snoozed? Skip.
+  if (s.backupNagSnoozedUntil && s.backupNagSnoozedUntil > now) return '';
+  const last = s.lastBackupAt || 0;
+  const daysSince = last ? Math.floor((now - last) / 86400000) : null;
+  // Show if never backed up OR >14 days since last.
+  if (daysSince !== null && daysSince < 14) return '';
+  const msg = daysSince === null
+    ? "You haven't downloaded an encrypted backup yet. If anything happens to your Vercel store, your data is gone."
+    : `${daysSince} days since your last backup. Grab a fresh copy — it only takes a second.`;
+  return `
+    <div class="backup-nag">
+      <div class="backup-nag-txt">
+        <div class="backup-nag-h">📦 Backup reminder</div>
+        <div class="backup-nag-s">${msg}</div>
+      </div>
+      <div class="backup-nag-acts">
+        <button class="btn-primary btn-sm" data-action="backup-now">Download backup</button>
+        <button class="btn-ghost btn-sm" data-action="backup-snooze">Remind me later</button>
+      </div>
+    </div>
+  `;
+}
+
+async function doBackupNow() {
+  const cryptoLib = await import('../crypto.js');
+  const bytes = await cryptoLib.encrypt(store.state.db);
+  const blob = new Blob([bytes], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `wp-studio-${new Date().toISOString().slice(0, 10)}.wps`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  store.updateSettings({ lastBackupAt: Date.now(), backupNagSnoozedUntil: 0 });
+}
+
 export function wireEvents(root) {
   root.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action]');
@@ -228,6 +271,11 @@ export function wireEvents(root) {
       store.uiMutate(ui => { ui.view = 'sites'; });
     } else if (action === 'open-client-sites') {
       store.uiMutate(ui => { ui.view = 'client'; ui.clientId = el.dataset.id; ui.clientTab = 'sites'; });
+    } else if (action === 'backup-now') {
+      doBackupNow();
+    } else if (action === 'backup-snooze') {
+      // Hide for 7 days.
+      store.updateSettings({ backupNagSnoozedUntil: Date.now() + 7 * 86400000 });
     }
   });
 }

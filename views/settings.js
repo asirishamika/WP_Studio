@@ -233,6 +233,7 @@ async function exportEncrypted() {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1500);
+  store.updateSettings({ lastBackupAt: Date.now(), backupNagSnoozedUntil: 0 });
 }
 
 function exportPlain() {

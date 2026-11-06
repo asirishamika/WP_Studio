@@ -36,7 +36,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (req.method === 'GET') {
+    if (req.method === 'GET' || req.method === 'HEAD') {
       let info;
       try {
         info = await head(DB_KEY);
@@ -52,13 +52,16 @@ export default async function handler(req, res) {
         }
         throw e;
       }
+      res.setHeader('X-Blob-Updated-At', info.uploadedAt || '');
+      res.setHeader('Cache-Control', 'no-store');
+      if (req.method === 'HEAD') {
+        return res.status(200).end();
+      }
       const downloadUrl = info.downloadUrl || info.url;
       const r = await fetch(downloadUrl, { cache: 'no-store' });
       if (!r.ok) return res.status(502).json({ error: 'blob_fetch_failed' });
       const buf = Buffer.from(await r.arrayBuffer());
       res.setHeader('Content-Type', 'application/octet-stream');
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('X-Blob-Updated-At', info.uploadedAt || '');
       return res.send(buf);
     }
 
@@ -74,7 +77,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, uploadedAt: blob.uploadedAt, size: body.length });
     }
 
-    res.setHeader('Allow', 'GET, PUT');
+    res.setHeader('Allow', 'GET, HEAD, PUT');
     return res.status(405).json({ error: 'method_not_allowed' });
   } catch (e) {
     const msg = (e && e.message) || 'unknown';

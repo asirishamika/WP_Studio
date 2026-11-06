@@ -63,9 +63,13 @@ function setLoading(btnId, loading, label) {
 async function boot() {
   if (!api.getToken()) { showGate('token'); return; }
   try {
-    const blob = await api.fetchBlob();
-    if (blob === null) showGate('setup');
-    else { bootState.blobBytes = blob; showGate('unlock'); }
+    const r = await api.fetchBlobWithMeta();
+    if (r === null) showGate('setup');
+    else {
+      bootState.blobBytes = r.bytes;
+      bootState.serverUpdatedAt = r.updatedAt || null;
+      showGate('unlock');
+    }
   } catch (e) {
     msg('token', e.message === 'BAD_TOKEN'
       ? 'The token saved on this device is not accepted. Paste it again.'
@@ -96,8 +100,9 @@ document.getElementById('setup-btn').addEventListener('click', async () => {
     const now = Date.now();
     const db = { ...EMPTY_DB, createdAt: now, updatedAt: now };
     const bytes = await cryptoLib.encrypt(db);
-    await api.putBlob(bytes);
+    const r = await api.putBlob(bytes);
     store.setDb(db);
+    store.state.serverUpdatedAt = r && r.uploadedAt ? r.uploadedAt : null;
     showApp();
   } catch (e) {
     msg('setup', 'Could not create vault: ' + e.message, 'err');
@@ -114,6 +119,8 @@ document.getElementById('unlock-btn').addEventListener('click', async () => {
     const db = await cryptoLib.unlock(pw, bootState.blobBytes);
     document.getElementById('unlock-pw').value = '';
     store.setDb(db);
+    store.state.serverUpdatedAt = bootState.serverUpdatedAt || null;
+    store.restoreTimer();
     showApp();
   } catch (e) {
     msg('unlock', e.message === 'WRONG_PASSWORD' ? 'Wrong password.' : ('Could not unlock: ' + e.message), 'err');
@@ -210,6 +217,7 @@ function renderApp() {
 
     <div id="modal-slot">${modals.render()}</div>
     <div id="palette-slot">${palette.render()}</div>
+    ${conflictModal()}
   `;
 
   wireShell(app);
@@ -283,12 +291,52 @@ function mobileTopBar() {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         `}
       </button>
-      <div class="mobile-top-title">${h(title)}</div>
+      <div class="mobile-top-title">
+        ${saveDot()}
+        <span>${h(title)}</span>
+      </div>
       <button class="mobile-top-btn" data-action="open-palette" aria-label="Search">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </button>
     </header>
   `;
+}
+
+function conflictModal() {
+  if (!store.state.conflict) return '';
+  return `
+    <div class="ov show" data-conflict-ov>
+      <div class="modal modal-sm" data-stop>
+        <div class="m-hdr">
+          <div class="m-title">⚠ Vault was edited elsewhere</div>
+        </div>
+        <div class="m-body">
+          <p style="margin:0 0 12px;line-height:1.55">
+            Another device saved a newer version of this vault since you unlocked it here.
+            If you overwrite, those remote changes are lost. If you reload, your current
+            unsaved edits here are lost.
+          </p>
+          <p style="margin:0;color:var(--ink4);font-size:13px">
+            Tip: download an encrypted backup first (Settings → Backup) if you're unsure.
+          </p>
+        </div>
+        <div class="m-foot">
+          <button class="btn-ghost" data-action="conflict-reload">Reload remote (lose my edits)</button>
+          <button class="btn-primary" data-action="conflict-overwrite">Overwrite remote</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function saveDot() {
+  const s = store.state;
+  let cls = 'ok', title = 'Saved';
+  if (s.conflict) { cls = 'conflict'; title = 'Conflict with another device'; }
+  else if (s.lastError) { cls = 'err'; title = 'Save error: ' + s.lastError; }
+  else if (s.saving) { cls = 'saving'; title = 'Saving…'; }
+  else if (s.dirty) { cls = 'dirty'; title = 'Unsaved changes'; }
+  return `<span class="save-dot save-dot-${cls}" title="${h(title)}" aria-label="${h(title)}"></span>`;
 }
 
 function mobileBottomNav() {
@@ -365,6 +413,7 @@ function clientSidebarRow(c) {
 
 function saveStatus() {
   const s = store.state;
+  if (s.conflict) return '⚠ conflict';
   if (s.saving) return '💾 saving…';
   if (s.lastError) return `⚠ ${s.lastError}`;
   if (s.dirty) return '• unsaved';
@@ -404,6 +453,10 @@ function wireShell(app) {
         else if (ui.view === 'client') { ui.view = 'today'; ui.clientId = null; }
         else ui.view = 'today';
       });
+    } else if (el.dataset.action === 'conflict-reload') {
+      store.resolveConflict('reload');
+    } else if (el.dataset.action === 'conflict-overwrite') {
+      store.resolveConflict('overwrite');
     }
   });
 
